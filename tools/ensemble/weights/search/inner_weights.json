@@ -1,0 +1,23 @@
+{
+  "raw": {
+    "beit3_v2": 0.2,
+    "beit3_helip": 3.0,
+    "metaclip_v1": 0.8,
+    "eva02": 0.0,
+    "eva02_pre": 0.1
+  },
+  "massnorm": {
+    "beit3_v2": 0.06,
+    "beit3_helip": 0.9,
+    "metaclip_v1": 0.24,
+    "eva02": 0.0,
+    "eva02_pre": 0.03
+  },
+  "deployed": {
+    "beit3_v2": 0.5,
+    "beit3_helip": 0.4,
+    "metaclip_v1": 0.15,
+    "eva02": 0.05,
+    "eva02_pre": 0.08
+  }
+}

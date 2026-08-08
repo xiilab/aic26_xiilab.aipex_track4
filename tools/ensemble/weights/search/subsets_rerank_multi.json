@@ -1,0 +1,108 @@
+{
+  "layer": "rerank",
+  "objective": "multi",
+  "full": {
+    "internvl_r32": 1.0,
+    "pixtral": 0.4,
+    "qwen3vl_2b": 1.0,
+    "llama": 0.5
+  },
+  "combos": {
+    "RSTPReid": {
+      "internvl_r32": 1.0,
+      "pixtral": 0.7,
+      "qwen3vl_2b": 1.0,
+      "llama": 0.6
+    },
+    "UCA": {
+      "internvl_r32": 1.0,
+      "pixtral": 0.1,
+      "qwen3vl_2b": 1.0,
+      "llama": 0.4
+    },
+    "UCC": {
+      "internvl_r32": 1.0,
+      "pixtral": 0.0,
+      "qwen3vl_2b": 0.5,
+      "llama": 0.0
+    },
+    "RSTPReid+UCA": {
+      "internvl_r32": 1.0,
+      "pixtral": 0.7,
+      "qwen3vl_2b": 1.0,
+      "llama": 0.6
+    },
+    "RSTPReid+UCC": {
+      "internvl_r32": 1.0,
+      "pixtral": 0.1,
+      "qwen3vl_2b": 1.0,
+      "llama": 0.2
+    },
+    "UCA+UCC": {
+      "internvl_r32": 1.0,
+      "pixtral": 0.4,
+      "qwen3vl_2b": 1.0,
+      "llama": 0.5
+    },
+    "RSTPReid+UCA+UCC": {
+      "internvl_r32": 1.0,
+      "pixtral": 0.4,
+      "qwen3vl_2b": 1.0,
+      "llama": 0.5
+    }
+  },
+  "sizes": {
+    "200": {
+      "cos_full_mean": 0.9699845623437402,
+      "cos_full_std": 0.01909840440175636,
+      "cos_dep_mean": 0.8964309799326381,
+      "exact_seeds": "0/9",
+      "median_matches_full": false,
+      "median_weights": {
+        "internvl_r32": 1.0,
+        "pixtral": 0.4,
+        "qwen3vl_2b": 0.8,
+        "llama": 0.2
+      }
+    },
+    "500": {
+      "cos_full_mean": 0.9873804886405735,
+      "cos_full_std": 0.018234651112984494,
+      "cos_dep_mean": 0.8670361179502866,
+      "exact_seeds": "4/9",
+      "median_matches_full": true,
+      "median_weights": {
+        "internvl_r32": 1.0,
+        "pixtral": 0.4,
+        "qwen3vl_2b": 1.0,
+        "llama": 0.5
+      }
+    },
+    "1000": {
+      "cos_full_mean": 0.98939726795062,
+      "cos_full_std": 0.013065306208174057,
+      "cos_dep_mean": 0.8481296028081442,
+      "exact_seeds": "4/9",
+      "median_matches_full": true,
+      "median_weights": {
+        "internvl_r32": 1.0,
+        "pixtral": 0.4,
+        "qwen3vl_2b": 1.0,
+        "llama": 0.5
+      }
+    },
+    "2000": {
+      "cos_full_mean": 0.9999999999995849,
+      "cos_full_std": 1.1102230246251565e-16,
+      "cos_dep_mean": 0.8546050159302675,
+      "exact_seeds": "9/9",
+      "median_matches_full": true,
+      "median_weights": {
+        "internvl_r32": 1.0,
+        "pixtral": 0.4,
+        "qwen3vl_2b": 1.0,
+        "llama": 0.5
+      }
+    }
+  }
+}

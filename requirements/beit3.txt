@@ -1,0 +1,16 @@
+-r core.txt
+transformers==4.30.2
+timm==1.0.26
+sentencepiece==0.2.1
+open_clip_torch==3.3.0
+torchvision==0.23.0+cu129
+peft==0.18.1
+tensorboard==2.20.0
+opencv-python-headless==4.13.0.92
+fairscale==0.4.13
+# third_party/beit3/utils.py imports both at module level (lines 25-26)
+torchmetrics
+tensorboardX==2.6.2.2
+# torchscale is installed separately — see requirements/README.md
+# (its setup.py pins fairscale==0.4.0 and timm==0.4.12, which conflict with the versions above)
+

@@ -1,0 +1,23 @@
+{
+  "derived_self": {
+    "anchor_tcap": 0.3,
+    "metaclip2": 0.25,
+    "mc2h378_peft": 0.25,
+    "gme": 0.0,
+    "eva02_pre": 0.15
+  },
+  "derived_multi": {
+    "anchor_tcap": 0.2,
+    "metaclip2": 0.0,
+    "mc2h378_peft": 0.3,
+    "gme": 0.0,
+    "eva02_pre": 0.2
+  },
+  "deployed": {
+    "anchor_tcap": 0.333,
+    "metaclip2": 0.3,
+    "mc2h378_peft": 0.25,
+    "gme": 0.1,
+    "eva02_pre": 0.08
+  }
+}

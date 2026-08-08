@@ -1,0 +1,18 @@
+{
+  "adopted_step": "ex007000",
+  "timestamp": "2026-06-16T10:42:42",
+  "hostname": "4c820ad35e33",
+  "python": "3.11.13",
+  "platform": "Linux-6.8.0-87-generic-x86_64-with-glibc2.35",
+  "torch": "2.8.0+cu129",
+  "cuda": "12.9",
+  "gpu_count": 1,
+  "gpus": [
+    {
+      "idx": 0,
+      "name": "NVIDIA B300 SXM6 AC"
+    }
+  ],
+  "transformers": "5.4.0",
+  "peft": "0.18.1"
+}

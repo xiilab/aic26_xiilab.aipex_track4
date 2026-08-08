@@ -1,0 +1,21 @@
+{
+  "sets": [
+    "ucc",
+    "uca"
+  ],
+  "objective": "self",
+  "derived": {
+    "anchor_tcap": 0.5,
+    "metaclip2": 0.0,
+    "mc2h378_peft": 0.0,
+    "gme": 0.0,
+    "eva02_pre": 0.7
+  },
+  "deployed": {
+    "anchor_tcap": 0.333,
+    "metaclip2": 0.3,
+    "mc2h378_peft": 0.25,
+    "gme": 0.1,
+    "eva02_pre": 0.08
+  }
+}

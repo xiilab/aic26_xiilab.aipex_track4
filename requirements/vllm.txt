@@ -1,0 +1,12 @@
+torch==2.11.0+cu130
+vllm==0.22.0
+transformers==5.9.0
+peft==0.19.1
+safetensors==0.7.0
+sentencepiece==0.2.1
+numpy==2.3.5
+pillow==12.2.0
+# required by the reranker script bundled with Qwen3-VL-Reranker (scripts/qwen3_vl_reranker.py)
+scipy==1.16.3
+qwen-vl-utils==0.0.14
+tensorboard

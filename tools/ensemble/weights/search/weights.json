@@ -1,0 +1,88 @@
+{
+  "derived_external_all": {
+    "internvl_r32": 1.0,
+    "pixtral": 0.4,
+    "qwen3vl_2b": 1.0,
+    "llama": 0.5
+  },
+  "derived_self_objective": {
+    "internvl_r32": 1.0,
+    "pixtral": 0.15,
+    "qwen3vl_2b": 0.7,
+    "llama": 0.0
+  },
+  "derived_self_objective_massnorm": {
+    "internvl_r32": 0.757,
+    "pixtral": 0.114,
+    "qwen3vl_2b": 0.53,
+    "llama": 0.0
+  },
+  "derived_multi_massnorm": {
+    "internvl_r32": 0.483,
+    "pixtral": 0.193,
+    "qwen3vl_2b": 0.483,
+    "llama": 0.241
+  },
+  "derived_with_8b": {
+    "internvl_r32": 1.0,
+    "pixtral": 0.05,
+    "qwen3vl_2b": 0.2,
+    "llama": 0.2,
+    "8b": 1.0
+  },
+  "single": {
+    "RSTPReid": {
+      "internvl_r32": 1.0,
+      "pixtral": 0.7,
+      "qwen3vl_2b": 1.0,
+      "llama": 0.6
+    },
+    "UCA": {
+      "internvl_r32": 1.0,
+      "pixtral": 0.1,
+      "qwen3vl_2b": 1.0,
+      "llama": 0.4
+    },
+    "UCC": {
+      "internvl_r32": 1.0,
+      "pixtral": 0.0,
+      "qwen3vl_2b": 0.5,
+      "llama": 0.0
+    }
+  },
+  "lodo": {
+    "RSTPReid": {
+      "internvl_r32": 1.0,
+      "pixtral": 0.4,
+      "qwen3vl_2b": 1.0,
+      "llama": 0.5
+    },
+    "UCA": {
+      "internvl_r32": 1.0,
+      "pixtral": 0.1,
+      "qwen3vl_2b": 1.0,
+      "llama": 0.2
+    },
+    "UCC": {
+      "internvl_r32": 1.0,
+      "pixtral": 0.7,
+      "qwen3vl_2b": 1.0,
+      "llama": 0.6
+    }
+  },
+  "deployed_best": {
+    "internvl_r32": 0.7,
+    "pixtral": 0.4,
+    "qwen3vl_2b": 0.2,
+    "llama": 0.1,
+    "8b": 0.0
+  },
+  "deployed_robust": {
+    "internvl_r32": 0.7,
+    "pixtral": 0.3,
+    "qwen3vl_2b": 0.2,
+    "llama": 0.1,
+    "8b": 0.0
+  },
+  "sim": 0.55
+}

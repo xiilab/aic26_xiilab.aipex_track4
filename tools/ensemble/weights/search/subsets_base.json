@@ -1,0 +1,52 @@
+{
+  "layer": "base",
+  "objective": "self",
+  "full": {
+    "anchor_tcap": 0.3,
+    "metaclip2": 0.25,
+    "mc2h378_peft": 0.25,
+    "gme": 0.0,
+    "eva02_pre": 0.15
+  },
+  "sizes": {
+    "100": {
+      "cos_full_mean": 0.9452306671754471,
+      "cos_full_std": 0.014212838290124319,
+      "cos_dep_mean": 0.9411320470059851,
+      "cos_dep_noanchor_mean": 0.733166830852589,
+      "median_weights": {
+        "anchor_tcap": 0.3,
+        "metaclip2": 0.2,
+        "mc2h378_peft": 0.0,
+        "gme": 0.0,
+        "eva02_pre": 0.08
+      }
+    },
+    "500": {
+      "cos_full_mean": 0.9320170994919665,
+      "cos_full_std": 0.021919491682418833,
+      "cos_dep_mean": 0.923421046031564,
+      "cos_dep_noanchor_mean": 0.732317951202741,
+      "median_weights": {
+        "anchor_tcap": 0.1,
+        "metaclip2": 0.1,
+        "mc2h378_peft": 0.3,
+        "gme": 0.0,
+        "eva02_pre": 0.1
+      }
+    },
+    "2000": {
+      "cos_full_mean": 0.9171442318315796,
+      "cos_full_std": 0.023532084763347987,
+      "cos_dep_mean": 0.9037735107740799,
+      "cos_dep_noanchor_mean": 0.7102104838741086,
+      "median_weights": {
+        "anchor_tcap": 0.3,
+        "metaclip2": 0.05,
+        "mc2h378_peft": 0.7,
+        "gme": 0.0,
+        "eva02_pre": 0.15
+      }
+    }
+  }
+}

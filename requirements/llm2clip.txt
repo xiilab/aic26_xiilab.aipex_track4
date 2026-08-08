@@ -1,0 +1,7 @@
+-r core.txt
+transformers==4.56.2
+peft==0.18.1
+torchvision==0.23.0+cu129
+open_clip_torch==3.3.0
+opencv-python-headless==4.13.0.92
+tqdm==4.67.1

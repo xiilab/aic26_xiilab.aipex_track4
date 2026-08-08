@@ -1,0 +1,53 @@
+{
+  "meta": {
+    "name": "derived_external",
+    "encoder_source": "UCC (self-image), all queries · member cosine 0.996 against the adopted weights",
+    "comb_source": "UCA+UCC (multi, DoRA top-7 masking) + PAB rule-clean alpha=0.72 -> mass 1.404",
+    "derive": "tools/ensemble/derive_base.py · tools/ensemble/derive_comb.py"
+  },
+  "base": {
+    "anchor": {
+      "anchor_tcap": 1.0
+    },
+    "members": {
+      "r10_base": 2.0
+    },
+    "inner": {
+      "metaclip2": 0.375,
+      "mc2h378_peft": 0.25,
+      "gme": 0.05
+    }
+  },
+  "comb": {
+    "sim": 0.55,
+    "internvl_r32": 0.72,
+    "pixtral": 0.288,
+    "qwen3vl_2b": 0.288,
+    "llama": 0.108,
+    "8b": 0.0
+  },
+  "variants": {
+    "best": {},
+    "robust": {}
+  },
+  "tail": {
+    "overlay_w": [
+      0.55,
+      0.2,
+      0.0,
+      0.7,
+      0.3,
+      0.1
+    ],
+    "claim_theta": 0.5,
+    "save_m": 0.5,
+    "nn_cos": 0.8,
+    "nn_cons": 4,
+    "r5_cos": 0.8,
+    "propagate_ncons": 6,
+    "final_pass_tau_px": 512
+  },
+  "injective": {
+    "T": 1.0
+  }
+}

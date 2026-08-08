@@ -1,0 +1,4 @@
+* text=auto eol=lf
+
+# ── Generated artifacts: excluded from language stats and diffs (not source) ──
+assets/**                              linguist-generated=true -diff
