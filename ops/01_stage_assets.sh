@@ -2,8 +2,13 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # 01_stage_assets.sh — populate the destination tree with the encoding inputs, then check them
 #
-# In a fresh destination tree assets/{data,model,cache} hold only .gitkeep. Encoding needs these
-# three:
+# A fresh clone carries no assets at all — data, caches and weights are downloaded from the Drive
+# bundle (ARTIFACTS.md). Unpacking that bundle straight into assets/ needs no staging and this
+# script is not involved. It exists for the other case: the trees already sit somewhere else on the
+# machine, under a directory laid out like this repository, and should be linked in rather than
+# copied. Set SRC_REPO to that directory.
+#
+# Encoding needs three of them:
 #   assets/data/raw/pab_test/{gallery,query_index.txt,query_text.json}   evaluation input
 #   assets/model/encoder/*, assets/model/hf_cache/                       zero-shot backbones
 #   assets/data/heldout_v1/                                             selection bench (02)
@@ -14,9 +19,9 @@
 #
 # Usage:
 #   bash ops/01_stage_assets.sh --check          # check only, create nothing
-#   bash ops/01_stage_assets.sh                  # stage with symlinks
-#   MODE=copy bash ops/01_stage_assets.sh --only heldout   # copy just the small ones
-#   bash ops/01_stage_assets.sh --dry-run
+#   SRC_REPO=<dir> bash ops/01_stage_assets.sh   # stage with symlinks
+#   MODE=copy SRC_REPO=<dir> bash ops/01_stage_assets.sh --only heldout   # copy just the small ones
+#   SRC_REPO=<dir> bash ops/01_stage_assets.sh --dry-run
 # ─────────────────────────────────────────────────────────────────────────────
 # ── Tolerating edits while running ─────────────────────────────────────────
 # bash reads a script by byte offset, so editing the original during a job that runs for tens of
@@ -49,10 +54,11 @@ done
 # Item: name | source (relative to SRC_REPO) | destination
 #
 # Two paths are deliberately not handled here:
-#   assets/cache  — the repository ships 22 real files (union_pool.pt · *_union_cache.pt ·
-#                   fuse_cache/*.npy); replacing it wholesale would delete those tracked files.
+#   assets/cache  — downloaded from the Drive bundle, or produced by 04/05. Its four subtrees fill
+#                   at different times, so replacing the parent wholesale would drop whichever
+#                   ones are already there; only its status is reported, below.
 #   assets/model  — its four children (encoder·hf_cache·reranker·vlm_models) are staged
-#                   individually; symlinking the parent would drop the tracked .gitkeep files.
+#                   individually; symlinking the parent would drop the others.
 # Adopted weights plus the selection and encoding inputs only; caches are produced, not staged.
 # Training data (recaption·manifest·mining) is excluded — stage it with --only when needed.
 ITEMS=(
@@ -72,28 +78,38 @@ EXTRA_ITEMS=(
 )
 [ -n "${ONLY:-}" ] && ITEMS+=("${EXTRA_ITEMS[@]}")
 
-say "[01] staging assets — MODE=$MODE · source $SRC_REPO"
-[ -d "$SRC_REPO" ] || die "source tree not found: $SRC_REPO  (set SRC_REPO)"
-df -k /DATA | tail -1 | awk '{printf "  free disk: %.1f GiB\n", $4/1048576}'
+# --check reads the destination only, so it needs no source tree.
+if [ "$CHECK_ONLY" = 1 ]; then
+  say "[01] checking the destination tree — $REPO"
+else
+  say "[01] staging assets — MODE=$MODE · source ${SRC_REPO:-<unset>}"
+  [ -n "$SRC_REPO" ] || die "SRC_REPO is not set.
+      Staging links assets in from a directory laid out like this repository, and there is no
+      default for where that sits. Either
+        · unpack the Drive bundle straight into assets/ — nothing to stage, see ARTIFACTS.md — or
+        · SRC_REPO=/path/to/that/tree bash ops/01_stage_assets.sh"
+  [ -d "$SRC_REPO" ] || die "source tree not found: $SRC_REPO  (set SRC_REPO)"
+fi
+df -k "$REPO" | tail -1 | awk '{printf "  free disk: %.1f GiB\n", $4/1048576}'
 echo
 
 stage() {
-  local name="$1" src="$SRC_REPO/$2" dst="$REPO/$3"
+  local name="$1" src="${SRC_REPO:+$SRC_REPO/$2}" dst="$REPO/$3"
   [ -n "$ONLY" ] && [ "$ONLY" != "$name" ] && return 0
   printf '  %-12s' "$name"
 
-  if [ ! -e "$src" ]; then printf '\033[33m⚠ source missing\033[0m %s\n' "$src"; return 0; fi
-
   # Leave anything already populated alone. The test looks for a **regular file**, so the empty
-  # subdirectories a git clone creates (encoder/ · hf_cache/ …) are not mistaken for content.
+  # subdirectories setup_assets.sh creates (encoder/ · hf_cache/ …) are not mistaken for content.
   # find|head would trip pipefail through SIGPIPE, so -quit ends it instead.
+  # This runs before the source is consulted, so --check works with no SRC_REPO at all.
   local first; first=$(find "$dst" -type f ! -name '.gitkeep' -print -quit 2>/dev/null || true)
   if [ -n "$first" ] || [ -L "$dst" ]; then
     printf '\033[32m✓ already present\033[0m (%s)\n' "$([ -L "$dst" ] && echo symlink || echo files)"
     return 0
   fi
 
-  if [ "$CHECK_ONLY" = 1 ]; then printf '\033[33mempty (needs staging)\033[0m\n'; return 0; fi
+  if [ "$CHECK_ONLY" = 1 ]; then printf '\033[33mempty (needs the download)\033[0m\n'; return 0; fi
+  if [ ! -e "$src" ]; then printf '\033[33m⚠ source missing\033[0m %s\n' "$src"; return 0; fi
   local sz; sz=$(du -sh "$src" 2>/dev/null | cut -f1 || true)   # measured only for a real staging run
   printf '%s -> ' "$sz"
 
@@ -114,12 +130,12 @@ for row in "${ITEMS[@]}"; do
   stage "$n" "$s" "$d"
 done
 
-# ── assets/cache status (not staged — it is repository content) ────────────
+# ── assets/cache status (never staged — downloaded, or produced by 04/05) ──
 echo
-say "[01] assets/cache — shipped with the repository (never replaced)"
+say "[01] assets/cache — from the Drive bundle, or rebuilt by 04/05 (never staged here)"
 for f in s1_base/union_pool.pt s1_base/base_score.pt s2_rerank/8b_union_cache.pt s4_nn/gme_feats.pt; do
   if [ -e "assets/cache/$f" ]; then ok "$f"
-  else printf '  \033[33m·\033[0m %s — missing (build it by encoding, or copy it in individually)\n' "$f"; fi
+  else printf '  \033[33m·\033[0m %s — missing (download it, or rebuild it by encoding)\n' "$f"; fi
 done
 
 # ── Required encoding inputs ───────────────────────────────────────────────

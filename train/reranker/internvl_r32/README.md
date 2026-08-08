@@ -18,13 +18,19 @@ not change the scale and the result drops straight into the deployment cache. Tr
 | grad accum | 8 |
 | checkpoints | `<out>/step{N}` every `--save-every` steps (default 500) |
 
-**Environment: `.venv_vllm`.** On torch 2.8 the MoE layers dispatch to `torch._grouped_mm`
-(Hopper only), so every forward raises `RuntimeError`; `train.py` catches per-example exceptions, so
-the run finishes silently with **0 steps**. If the step counter stays at 0, this is why.
+**Environment: the `track4_vllm` conda env**, created by
+`bash requirements/setup_conda_envs.sh --only vllm`. On torch 2.8 the MoE layers dispatch to
+`torch._grouped_mm` (Hopper only), so every forward raises `RuntimeError`; `train.py` catches
+per-example exceptions, so the run finishes silently with **0 steps**. If the step counter stays at
+0, this is why.
 
 ## Data flow
 
+`$PY_VLLM` below is that env's interpreter; the steps without it run in `track4_train`.
+
 ```bash
+export PY_VLLM=$(conda info --base)/envs/track4_vllm/bin/python
+
 # 1. mine hard negatives with the SigLIP2 anchor (150k subsample)
 python mine_hardneg.py --gpu 6 --bs 48
 
@@ -35,7 +41,7 @@ python build_rescue_pairs.py
 $PY_VLLM build_antibreak_pairs.py --gpu 6 --max-q 6000
 
 # 3. merge A_rescue + B_antibreak into assets/data/mining/dpo_train.jsonl, then train
-CUDA_VISIBLE_DEVICES=6 .venv_vllm/bin/python -u train.py \
+CUDA_VISIBLE_DEVICES=6 $PY_VLLM -u train.py \
     --data assets/data/mining/dpo_train.jsonl --lora-r 32 --lr 1e-4 --grad-accum 8 --save-every 500
 ```
 
@@ -58,7 +64,7 @@ Every builder refuses to overwrite an existing output; pass `--force` to rebuild
 ## Smoke test
 
 ```bash
-.venv_vllm/bin/python -u train.py --max-steps 20 --heldout 500
+$PY_VLLM -u train.py --max-steps 20 --heldout 500
 ```
 
 Holds out 500 pairs and reports pair-acc and mean margin before and after training, so a

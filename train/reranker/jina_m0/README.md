@@ -53,7 +53,7 @@ Constants live in the `1. Config` block of `train.py`; there are no hyper-parame
 python build_negcache.py --gpu 6
 
 # 2. train
-/opt/conda/bin/python3.11 -u train.py --gpu 6
+python -u train.py --gpu 6
 ```
 
 `build_negcache.py` starts from the qwen3vl_2b negcache (top-8 variant), embeds captions with MiniLM,

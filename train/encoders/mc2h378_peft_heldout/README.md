@@ -37,7 +37,7 @@ The printed range goes to [`mc2h378_peft_all/build_swa.py`](../mc2h378_peft_all/
 | `assets/data/raw/pab_train/train_jpg_512` | dataset symlink |
 | HF cache for `facebook/metaclip-2-worldwide-huge-378` | `huggingface-cli download` |
 | `assets/data/heldout_v1` | `python train/gen/gen_heldout_v1.py --gpu 0` |
-| `assets/data/manifest/mc2h378_selfresidual_neighbors.pt` | shipped with the repository |
+| `assets/data/manifest/mc2h378_selfresidual_neighbors.pt` | in the Drive bundle |
 
 ## Files
 

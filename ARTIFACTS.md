@@ -5,7 +5,8 @@
 `assets/` is distributed separately from the repository — past GitHub's limits. It carries what was
 produced here (trained weights, stage caches, derived data) plus the `hf_cache` of third-party base
 weights. The large `vlm_models` bases are not redistributed; fetch those from their official sources
-(see below).
+(see below). Everything in the bundle is offered for research use, under the terms each artifact
+carries — [Licensing](#licensing).
 
 The download mirrors the repository layout, so the top level can be copied or symlinked in place:
 
@@ -14,10 +15,96 @@ ln -sfn /path/to/download/assets/cache assets/cache
 ln -sfn /path/to/download/assets/model assets/model
 ```
 
-`assets/` itself ships empty with the clone; everything under it is ignored by git.
+`assets/` itself ships empty with the clone; everything under it is ignored by git —
+`bash setup_assets.sh` creates the skeleton, and `--check` reports which trees are still empty.
 
-`requirements/setup_conda_envs.sh` creates the same skeleton if you are setting up the environments
-anyway.
+## Licensing
+
+Summarised from each model card and dataset page at the revisions this work used, with the licence
+tag quoted verbatim. It is a pointer, not legal advice — read the upstream terms before you rely on
+any of it, and re-check them, since a licence can change between revisions.
+
+**Two constraints cut across everything here.**
+
+1. **PAB is research-only.** The benchmark states that it *"can only be used for research, any
+   commercial usage is forbidden"* ([Shuyu-XJTU/CMP](https://github.com/Shuyu-XJTU/CMP)). Every
+   checkpoint below was trained on it, and every tree under `data/` is derived from it, so that
+   restriction reaches the whole distribution regardless of what the base licence permits.
+2. **A non-commercial base makes a non-commercial adapter.** A DoRA/LoRA adapter is a derivative of
+   the weights it was trained against and is useless without them, so it inherits their terms. The
+   repository's own MIT `LICENSE` covers **code only** — no model weight is relicensed by it.
+
+### Adopted checkpoints — `model/encoder` · `model/reranker`
+
+| checkpoint | form | base | base licence | terms carried |
+|---|---|---|---|---|
+| `anchor_filip` · `anchor_tcap` | DoRA | `google/siglip2-large-patch16-512` | Apache-2.0 | Apache-2.0 |
+| `siglip_maxsim` · `siglip_mining` | DoRA | `google/siglip2-large-patch16-384` | Apache-2.0 | Apache-2.0 |
+| `metaclip2` | DoRA | `facebook/metaclip-2-worldwide-l14` | **CC-BY-NC-4.0** | **non-commercial**, attribution required |
+| `mc2h378_peft` | DoRA | `facebook/metaclip-2-worldwide-huge-378` | **CC-BY-NC-4.0** | **non-commercial**, attribution required |
+| `metaclip_v1` | full FT | MetaCLIP v1 L/14-worldwide-xlmv | **CC-BY-NC** | **non-commercial** — the file contains the base weights themselves |
+| `beit3_v2` · `beit3_helip` · `beit3_pre` | full FT | BEiT3-large-384 ([microsoft/unilm](https://github.com/microsoft/unilm)) | MIT | MIT |
+| `llm2clip_lora_v3_best` · `llm2clip_anchor5` | LoRA ×2 | `microsoft/LLM2CLIP-Openai-L-14-336` | Apache-2.0 | Apache-2.0 |
+| `internvl_r32` | LoRA r32 | `InternVL3_5-30B-A3B-HF` | Apache-2.0 | Apache-2.0 |
+| `qwen3vl_2b` | DoRA | `Qwen/Qwen3-VL-Reranker-2B` | Apache-2.0 | Apache-2.0 |
+| `jina_m0` | DoRA | `jinaai/jina-reranker-m0` | **CC-BY-NC-4.0** | **non-commercial**, attribution required |
+
+The four non-commercial rows — `metaclip2`, `mc2h378_peft`, `metaclip_v1`, `jina_m0` — are S1/S2
+members of the submitted pipeline, so **the pipeline as a whole is non-commercial**. Commercial use
+of any of them needs a separate licence from the upstream authors (Jina AI sells one for
+`jina-reranker-m0`; Meta grants no commercial licence for CC-BY-NC MetaCLIP). CC-BY-NC-4.0 does
+permit redistribution for non-commercial purposes with attribution, which is what the Drive bundle
+relies on for these four adapters.
+
+`llm2clip_anchor5/query_hidden.pt` holds hidden states produced by
+`McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp` (tagged MIT, itself a Llama-3 derivative). It is
+model output, not weights, and the model is never loaded at inference.
+
+### Third-party bases
+
+`hf_cache` is mirrored in the bundle, and so are two `vlm_models` entries (`DFN5B-CLIP-ViT-H-14-378`
+and `CLIP-convnext_xxlarge-laion2B`); the rest of `vlm_models` is fetched from the official sources.
+Mirroring is a redistribution rather than a fetch, so the terms below are what it rests on: the
+CC-BY-NC rows permit it for non-commercial purposes with attribution, and the Apple licence permits
+it for research purposes as long as the copy carries the agreement and attribution notice — which
+is why `DFN5B-CLIP-ViT-H-14-378/LICENSE` travels with that directory.
+`Llama-3.2-11B-Vision-Instruct` and `Pixtral-12B-2409` are gated on the Hub and are not mirrored —
+fetch those in your own name rather than around the gate.
+
+| repository | licence tag | note |
+|---|---|---|
+| `google/siglip2-large-patch16-{384,512}` | apache-2.0 | |
+| `facebook/metaclip-2-worldwide-{l14,huge-378}` | **cc-by-nc-4.0** | non-commercial |
+| MetaCLIP v1 L/14-worldwide-xlmv | **CC-BY-NC** | non-commercial; from `facebookresearch/MetaCLIP`, not the Hub |
+| `jinaai/jina-reranker-m0` | **cc-by-nc-4.0** | non-commercial; commercial licence sold separately |
+| `microsoft/LLM2CLIP-Openai-L-14-336` | apache-2.0 | |
+| `openai/clip-vit-large-patch14-336` | no tag on the model card | upstream `openai/CLIP` is MIT |
+| `Qwen/Qwen3-VL-Reranker-{2B,8B}` · `Qwen3-VL-Embedding-8B` · `Qwen3.6-35B-A3B` | apache-2.0 | |
+| `Alibaba-NLP/gme-Qwen2-VL-2B-Instruct` | apache-2.0 | |
+| `InternVL3_5-30B-A3B-HF` | apache-2.0 | |
+| `Ovis2.5-9B` | apache-2.0 | `NOTICE` records its Qwen3-8B + SigLIP2 lineage |
+| `Pixtral-12B-2409` | apache-2.0 | **gated** on the Hub |
+| `Llama-3.2-11B-Vision-Instruct` | **llama3.2 community licence** | **gated**, and the card sets `extra_gated_eu_disallowed` — not licensed to EU-domiciled entities. Accept it yourself; ships `LICENSE.txt` + `USE_POLICY.md` |
+| `DFN5B-CLIP-ViT-H-14-378` | **apple-amlr** | Apple ML Research Model licence: **research purposes only**. Redistribution is allowed but must carry a copy of the agreement and the required attribution notice |
+| `CLIP-convnext_xxlarge-laion2B` | mit | |
+| `timm/eva02_large_patch14_clip_336…` | mit | |
+| `facebook/dinov2-base` · `google/mt5-base` · `sentence-transformers/all-MiniLM-L6-v2` | apache-2.0 | |
+| `facebook/xlm-v-base` · `McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp` | mit | the latter is a Llama-3 derivative |
+
+### Data
+
+| tree | derived from | terms |
+|---|---|---|
+| `raw/pab_{train,test}` | PAB | **not redistributed** — get it from [Shuyu-XJTU/CMP](https://github.com/Shuyu-XJTU/CMP) |
+| `raw/{ucc,uca,rstp}` | UCF-Crime-Caption · UCA · RSTPReid | **not redistributed** — original sources, each under its own terms |
+| `raw/recaption` | PAB train captions, rewritten by Qwen3-VL-30B (Apache-2.0, no restriction on outputs) | inherits the source terms |
+| `manifest` · `mining` · `benches` · `heldout_v1` | PAB train — the BEiT3 pair index carries its captions verbatim | inherits the source terms |
+| `cache/**` | scores over the test gallery | inherits the source terms |
+
+PAB grants no explicit redistribution right for its annotations, so the derived trees are offered
+for research reproduction only. Rebuild them locally instead with `train/gen/*` and the
+`build_*` scripts if that matters for your use — every one of them is regenerable, and
+[Training](README.md#training) gives the order.
 
 ## Required by goal
 
@@ -164,6 +251,8 @@ assets/model/reranker/
 **`hf_cache`** — 55 G. Ships in the Drive folder as `hf_cache/`; drop it at
 `assets/model/hf_cache` and skip the rest of this section. The scripts default to
 `HF_HOME=assets/model/hf_cache` and run with `HF_HUB_OFFLINE=1`, so nothing is fetched at run time.
+It carries third-party weights under their own terms, several of them non-commercial —
+[Licensing](#licensing).
 
 To build the cache from the Hub instead:
 
@@ -266,9 +355,10 @@ turns a caption into a pooled 8B hidden state before its text adapter, so the tr
 of those hiddens and inference reads `assets/model/encoder/llm2clip_anchor5/query_hidden.pt` — the
 model itself is never loaded by the pipeline.
 
-> Third-party weights carry their own terms, several gated —
-> `Llama-3.2-11B-Vision-Instruct` ships `LICENSE.txt` and `USE_POLICY.md`. Obtain them from their
-> official sources under those terms; the revisions above are what this work used.
+Fetch these from their official sources under their own terms — the revisions above are what this
+work used. `Llama-3.2-11B-Vision-Instruct` and `Pixtral-12B-2409` are gated and must be accepted on
+the Hub in your own name; `DFN5B-CLIP-ViT-H-14-378` is research-only under the Apple ML Research
+Model licence. Per-repository terms: [Licensing](#licensing).
 
 ## `data/`
 

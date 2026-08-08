@@ -11,6 +11,15 @@ bash requirements/setup_conda_envs.sh --only gme   # one env
 bash requirements/setup_conda_envs.sh --dry-run    # print the commands only
 ```
 
+`core.txt` gets no env of its own — reproduction needs only torch and numpy, so install it into
+whatever environment you already have. `core_cpu.txt` is the same set without the `+cu129` local
+version, for a CPU-only replay (no GPU is touched either way):
+
+```bash
+pip install -r requirements/core_cpu.txt \
+    --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple
+```
+
 `track4_beit3` needs one package on top of its requirements file:
 
 ```bash

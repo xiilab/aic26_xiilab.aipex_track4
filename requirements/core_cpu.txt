@@ -1,0 +1,7 @@
+# CPU-only variant of core.txt — same pins, without the +cu129 local version, so the wheels come
+# from the CPU index. The replay loads no model and runs on CPU in ~16 s:
+#   pip install -r requirements/core_cpu.txt \
+#       --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple
+torch==2.8.0
+numpy==2.4.4
+pillow==12.2.0

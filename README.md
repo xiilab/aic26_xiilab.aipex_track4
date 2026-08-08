@@ -35,8 +35,6 @@ Challenge.
 | 4 | UIT-OpenCube | 95.9370 | 92.4166 | 99.8483 | 99.8483 |
 | 5 | Safe AI | 95.9250 | 93.7310 | 98.5844 | 99.5450 |
 
-+0.0469 mAP@10 over the second team, with **every query retrieving its target within the top 10**.
-
 ---
 
 ## Pipeline
@@ -58,12 +56,25 @@ Everything below runs without training. The replay needs no GPU.
 
 ### Install
 
+Linux · **Python 3.11** · torch 2.8. Reproduction is CPU-only:
+
 ```bash
+# CPU — everything the replay needs
+pip install -r requirements/core_cpu.txt \
+    --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple
+
+# CUDA 12.9, if the same environment will also encode or score
 pip install -r requirements/core.txt --extra-index-url https://download.pytorch.org/whl/cu129
 ```
 
 `core.txt` is all you need to **reproduce the submission** — inference replays pre-computed
-scores from `assets/cache/`, so no VLM or encoder runtime is loaded.
+scores from `assets/cache/`, so no VLM or encoder runtime is loaded, and no GPU is touched.
+
+**GPU requirements** apply only to re-training and re-scoring: an NVIDIA GPU with a CUDA 12.9 (or
+13.0) driver, and enough memory for the largest member — `Qwen3.6-35B-A3B` is 69 G on disk, so a
+single 80 GB card is the practical floor. **`internvl_r32` additionally needs Hopper (sm_90) or
+newer**: its MoE dispatches to `torch._grouped_mm`, which exists on no earlier architecture. This
+work ran on B300s.
 
 Extra environments are only needed to re-train or re-score:
 
@@ -132,6 +143,12 @@ the same answer file.
 bash run_reproduce.sh best
 ```
 
+`best` names the weight set to run with — `variants.best` in
+[`tools/ensemble/weights/final.json`](tools/ensemble/weights/final.json), the values that produced
+the submitted answer. It is the only variant the script accepts; the argument exists so a different
+one can be added without changing the command. `WEIGHTS=<json>` substitutes a whole weight file
+instead.
+
 `TAG=<name>` renames the output to `answer_reproduced_<name>_noext.txt`, so runs can sit side by
 side; `REDUMP_DIR=<dir>` and `BASE_PT=<file>` swap in your own reranker scores or S1 base.
 
@@ -146,7 +163,7 @@ The submission file is written to `results/reproduced/`:
 | row | 10 gallery image ids, space-separated, ranked best first, without the `.jpg` extension |
 
 
-## Reproducing(bulid cache)
+## Reproducing (build cache)
 
 Every artifact listed under *Setting* is regenerated from `assets/model/` and the test set, in the
 order S1 members → base / union → S2 rerankers → recs · fuse_cache → S4b embeddings → S4 tail
@@ -193,18 +210,23 @@ Adapters only — each loads on top of its base from `hf_cache/` or `vlm_models/
 | member | base |
 |---|---|
 | `anchor_filip` (anchor) · `anchor_tcap` | SigLIP2-large-512 + DoRA |
+| `siglip_maxsim` | SigLIP2-large-384 + DoRA |
 | `metaclip2` · `mc2h378_peft` | MetaCLIP2 L/14 · huge-378 + DoRA |
 | `beit3_v2` · `beit3_helip` | BEiT3-large-384, full FT |
 | `metaclip_v1` | MetaCLIP v1 L/14-worldwide-xlmv (224), full FT |
 | `llm2clip_lora_v3_best` + `llm2clip_anchor5` | LLM2CLIP L-14-336 + two stacked LoRAs (S4b tail-NN, not an S1 member) |
+| `siglip_mining` | SigLIP2 + DoRA — the mining anchor for `build_negcache.py`, not a retrieval member |
 
 What each checkpoint directory contains: [`ARTIFACTS.md`](ARTIFACTS.md#model).
 
 Zero-shot members (`8B` · `pixtral` · `llama` · `ovis` · `gme` · `eva02_pre` · DFN · ConvNeXt)
 carry no adopted checkpoint — they use pretrained weights as published. DFN
-(`DFN5B-CLIP-ViT-H-14-378`) and ConvNeXt (`CLIP-convnext_xxlarge-laion2B`) are mirrored in the
+(`DFN5B-CLIP-ViT-H-14-378`, Apple ML Research Model licence — research use, and the copy carries
+Apple's agreement) and ConvNeXt (`CLIP-convnext_xxlarge-laion2B`, MIT) are mirrored in the
 [Drive folder](https://drive.google.com/drive/folders/1WDqTBnwe54WKoSsdsVskTSrrqGjoELii), so they
-can be dropped straight into `assets/model/vlm_models/`.
+can be dropped straight into `assets/model/vlm_models/`. `llama` and `pixtral` are gated on the Hub
+and have to be accepted in your own name. Per-repository terms:
+[Licensing](ARTIFACTS.md#licensing).
 
 Checkpoints were picked on the held-out split:
 
@@ -225,7 +247,7 @@ assets/       cache/ · cache_rep/                             stage scores (ado
               model/ · model_rep/                             checkpoints (adopted / reproduced)
               data/                                           raw · mining · benches · heldout_v1 · manifest
               runs/                                           training outputs (.gitignore)
-results/      final/ (adopted answers) · reproduced/ (run outputs)
+results/      reproduced/                                       run outputs (answer files)
 third_party/  beit3 (upstream, unmodified + helip · falcon · tic extensions)
 docs/         fig1_pipeline.{png,pdf}
 ```
@@ -267,7 +289,8 @@ export HF_HOME=$PWD/assets/model/hf_cache
 ```
 
 To pull the repositories from the Hub yourself instead, [`ARTIFACTS.md`](ARTIFACTS.md#model) lists
-every one with its `huggingface-cli` line and the exact revision this work used.
+every one with its `huggingface-cli` line and the exact revision this work used;
+[Licensing](ARTIFACTS.md#licensing) gives the terms each one carries.
 
 The remaining zero-shot members (`llama` · `pixtral` · `ovis` · `qwen3vl_embed8b` · `dfn` ·
 `convnext`) and the `metaclip_v1` base are not fetched through `huggingface-cli`: they live as plain
@@ -316,9 +339,11 @@ Every builder refuses to overwrite an existing output; pass `--force` to rebuild
 
 ### 3. Encoders
 
-Each encoder follows the same five steps. The SWA range is searched on the **heldout** run —
+The four DoRA encoders follow the same five steps. The SWA range is searched on the **heldout** run —
 it trained without the held-out images, so its metrics are unbiased — and applied to the
 **all** run, which is the deployed model. `search_swa_range.py` prints the range to pass on.
+`metaclip2` has no heldout pair, and the three full fine-tunes (`beit3_*`, `metaclip_v1`) select an
+epoch instead of merging one, so those four diverge — each is spelled out below.
 
 #### anchor_filip
 
@@ -477,12 +502,41 @@ python train/encoders/beit3/train.py helip --gpu 6 --data <excluded pab_full_web
     --init assets/runs/beit3_stage1_heldout/checkpoint-3.pth
 ```
 
+#### metaclip_v1
+
+Full fine-tune on `open_clip`, so no SWA here either. There is no `_heldout` / `_all` directory
+pair: one trainer switches on `EXCLUDE_HELDOUT`, and the output path follows the mode
+(`assets/runs/metaclip_v1_{heldout,all}/`), so the second run cannot overwrite the first. Both use
+the same 4-epoch budget, which is what makes the epoch transfer. It reads
+`assets/data/manifest/train.csv` — build it with `gen_metaclip_v1_csv.py` ([2. Data](#2-data)).
+
+```bash
+# 1. heldout training (EXCLUDE_HELDOUT=1 is the default)
+CUDA_VISIBLE_DEVICES=0,1 torchrun --nproc_per_node=2 \
+    train/encoders/metaclip_v1/train.py
+
+# 2. pick the best epoch on the held-out bench
+python train/encoders/eval/eval_heldout_openclip.py \
+    --model ViT-L-14-worldwide-xlmv \
+    --ckpt-dir assets/runs/metaclip_v1_heldout/checkpoints --epochs 1-4 --gpu 0
+
+# 3. all training — same budget, so the epoch from step 2 carries over
+EXCLUDE_HELDOUT=0 CUDA_VISIBLE_DEVICES=0,1 torchrun --nproc_per_node=2 \
+    train/encoders/metaclip_v1/train.py
+
+# 4. deploy the epoch from step 2
+python train/encoders/metaclip_v1/deploy.py \
+    assets/runs/metaclip_v1_all/checkpoints --epoch 4
+```
+
 `--run-note` names the run directory under `assets/runs/`; an existing name aborts the launch
-so two runs can never interleave their checkpoints. `deploy.py` writes to
-`assets/model_rep/encoder/<encoder>/`, leaving the adopted `assets/model/` untouched.
+so two runs can never interleave their checkpoints. `metaclip_v1` takes no `--run-note` — its path
+follows `EXCLUDE_HELDOUT` (override with `SAVE_DIR`), which is what keeps its two runs apart.
+Either way `deploy.py` writes to `assets/model_rep/encoder/<encoder>/`, leaving the adopted
+`assets/model/` untouched.
 
 Per-encoder configuration, inputs and switches: see the `README.md` in each
-`train/encoders/<encoder>_{all,heldout}/` directory.
+`train/encoders/<encoder>{,_all,_heldout}/` directory.
 
 #### llm2clip_anchor5
 
@@ -606,8 +660,12 @@ each `train/reranker/<member>/` directory.
 
 ## License
 
-Code is released under the MIT License ([`LICENSE`](LICENSE)). Model weights are **not**
-relicensed here — each backbone and reranker remains under its own terms. Vendored code from
+Code is released under the MIT License ([`LICENSE`](LICENSE)). Vendored code from
 [`microsoft/unilm`](https://github.com/microsoft/unilm) (BEiT3) is in
 [`third_party/beit3/`](third_party/beit3/README.md) with its original license and
 [`NOTICE`](third_party/NOTICE.md).
+
+Model weights and data are not relicensed here — each keeps its own terms, and several are
+non-commercial (MetaCLIP 2, MetaCLIP v1, jina-reranker-m0), so this work is research use only.
+Per-checkpoint licences, per-repository terms and dataset terms:
+[`ARTIFACTS.md` → Licensing](ARTIFACTS.md#licensing).

@@ -8,10 +8,11 @@ transformers path is used rather than vLLM, which deadlocks here.
 
 Input  --data = the merge of A_rescue (`build_rescue_pairs.py`) and B_antibreak
        (`build_antibreak_pairs.py`).
-Run    Requires **.venv_vllm**. On torch 2.8 the MoE layers dispatch to `torch._grouped_mm`
-       (Hopper only), so every forward raises RuntimeError; the `except: continue` below swallows
-       it and the run ends silently with 0 steps.
-        CUDA_VISIBLE_DEVICES=6 .venv_vllm/bin/python -u train.py \
+Run    Requires the **track4_vllm** conda env — bash requirements/setup_conda_envs.sh --only vllm,
+       then PY_VLLM=$(conda info --base)/envs/track4_vllm/bin/python. On torch 2.8 the MoE layers
+       dispatch to `torch._grouped_mm` (Hopper only), so every forward raises RuntimeError; the
+       `except: continue` below swallows it and the run ends silently with 0 steps.
+        CUDA_VISIBLE_DEVICES=6 $PY_VLLM -u train.py \
             --data assets/data/mining/dpo_train.jsonl --lora-r 32 --lr 1e-4 --grad-accum 8 --save-every 500
         smoke test: --max-steps 20 --heldout 500   (compares pair-acc before and after training)
 """

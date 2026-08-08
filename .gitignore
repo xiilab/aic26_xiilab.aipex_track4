@@ -6,34 +6,21 @@ fullpipe/
 # Personal local tool settings (recreated on permission approval) — not shared
 .claude/
 
-# ── Large artifacts — distributed as a Drive bundle (ARTIFACTS.md · artifacts_bundle/MANIFEST.md) ──
-# The real files sit here as hard links locally, but git does not track them.
-# They exceed GitHub's 100 MB per-file limit, so a commit would fail to push.
+# ── Large artifacts — distributed as a Drive bundle (ARTIFACTS.md) ──────────
+# The real files sit here locally, but git does not track any of them: `assets/` ships empty and is
+# filled by the download. Individual files also exceed GitHub's 100 MB limit, so a commit that
+# picked them up would fail to push.
 #
-# Name large *files* only. Blocking a whole tree such as `assets/cache/**` or `assets/data/**`
-# would also drop the small caches ARTIFACTS.md §1 lists as shipped (44 MB in total), and a
-# clone alone would then run neither the pipeline nor the external evaluation.
+# Weights, caches and data are blocked as whole trees below. Nothing under `assets/` is committed —
+# see ARTIFACTS.md for what the bundle carries, what has to be fetched from its own source instead,
+# and the licence each artifact comes under.
 
-# Adapters, 24 GB (only the README stays)
+# Adapters and third-party bases
 assets/model/**
 
-# S1 base score, 277 MB — rebuild with pipeline/S1_base/build_base.py
-pipeline/S1_base/base_score.pt
-
-# rule-clean greedy base score, 281 MB (external eval and search only, not needed for inference) —
-# regenerable. The small caches beside it (bench json · redump_*.pt, 1 MB) ship, so only the large
-# file is blocked.
-
-# The six S4b tail-NN encoder embeddings, ~1.4 GB — fetch them from the Drive bundle and link them
-# here (a required inference input). Large files and site-local symlinks are not committed; a clone
-# fills them in through the ARTIFACTS.md procedure.
 
 
-
-
-
-
-# Reproduction-run output (the adopted answer stays in results/final/)
+# Reproduction-run output — regenerable by run_reproduce.sh
 results/reproduced/**
 
 __pycache__/
@@ -44,7 +31,7 @@ __pycache__/
 assets/runs/**
 
 # Standard mount point for large data outside the repository — only the symlink is needed here,
-# the real files are site-local (see assets/external/README.md · assets/data/README.md)
+# the real files are site-local. ARTIFACTS.md documents the layout it must expose.
 assets/bundle
 assets/external/**
 
@@ -56,37 +43,23 @@ assets/model_rep/**
 assets/cache_rep/**
 .rep_logs/
 
-# ── S1 encoder member caches, 3.8 GB (build_base input) ──────────────────────
-# 100 MB–872 MB per file, past GitHub's limit. Distributed in the Drive bundle;
-# without it, rebuild with pipeline/S1_base/encode/encode_*.py (ARTIFACTS.md).
-
 # ── Datasets excluded entirely (distributed separately) ──────────────────────
 # assets/data, 25 GB — raw (12 GB) · manifest · mining · benches · heldout_v1.
-# Data ships outside the repository. The expected layout and the environment variables that
-# repoint it are in docs/ and in each script's docstring (PAB_TEST · PAB_TRAIN · MANIFEST_DIR …).
-# Documentation added under it is brought back by the exceptions below.
+# The raw datasets are never redistributed; the derived trees come from the Drive bundle, or are
+# rebuilt with train/gen/* and the build_* scripts. Environment variables that repoint them are in
+# ARTIFACTS.md and in each script's docstring (PAB_TEST · PAB_TRAIN · MANIFEST_DIR …).
 assets/data/**
 
-# ── Documentation (.md) is not committed (managed separately) ─────────────────
-# The root README is (git reads a trailing comment as part of the pattern, so comments go on
-# their own line)
-!/README.md
-!/ARTIFACTS.md
-!/pipeline/README.md
-!/third_party/beit3/README.md
-!/third_party/NOTICE.md
-
 # ── Caches excluded entirely (pipeline output · distributed separately) ───────
-# assets/cache holds the adopted run's stage caches, assets/cache_rep the reproduction run's.
-# Neither goes in the repository — rebuild them with the per-stage scripts:
+# assets/cache holds the adopted run's stage caches (including the S1 member caches build_base
+# reads), assets/cache_rep the reproduction run's. Neither goes in the repository — download them,
+# or rebuild with the per-stage scripts:
 #   S1 pipeline/S1_base/encode/encode_*.py -> build_base.py -> build_union.py
 #   S2 pipeline/S2_rerank/score_union_*.py · build_recs.py · dump_fuse_cache.py --from-union
 #   S4 pipeline/S4_tail/dump_nntail_cache.py
 assets/cache/**
-assets/cache_rep/**
 
 # git cannot carry empty directories, so `assets/` keeps one placeholder (assets/.gitkeep) and a
 # clone gets the mount point itself. Everything under it stays ignored by the rules above.
 # The subdirectories are created by setup_assets.sh (which setup_conda_envs.sh also calls);
 # run_reproduce.sh creates its own output paths.
-.claude/

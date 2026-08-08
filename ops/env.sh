@@ -17,23 +17,33 @@ cd "$REPO"                                  # every script assumes the repositor
 GPU="${GPU:-6}"
 GPU2="${GPU2:-7}"
 
-# ── Source repository (read-only) ──────────────────────────────────────────
-# Holds the original training runs, data and adopted weights. Never written to.
-SRC_REPO="${SRC_REPO:-/DATA/XIILAB.AIpex_track4}"
+# ── Source tree (read-only) ────────────────────────────────────────────────
+# Where 01 stages data, weights and runs from — a directory laid out like this repository, so
+# $SRC_REPO/assets/... resolves. Never written to. There is deliberately no default: it is
+# site-local, and 01 stops with instructions when it is unset.
+#
+#   SRC_REPO=/path/to/unpacked-drive-bundle  bash ops/01_stage_assets.sh
+#
+# Downloading straight into assets/ needs no staging at all — 01 exists only for the case where the
+# trees already sit somewhere else on the machine and should be linked rather than copied.
+SRC_REPO="${SRC_REPO:-}"
 
 # Two run roots; mixing them up means writing into the source tree:
 #   RUNS_SRC   input for selection (02). Per-epoch checkpoints of a heldout run exist only
 #              in the source tree. Read-only.
 #   RUNS_LOCAL input for deployment (03). The adopted checkpoints copied here, and the target
 #              of tools that write, such as build_swa.
-RUNS_SRC="${RUNS_SRC:-$SRC_REPO/assets/runs}"
+RUNS_SRC="${RUNS_SRC:-${SRC_REPO:+$SRC_REPO/assets/runs}}"
 RUNS_LOCAL="${RUNS_LOCAL:-$REPO/assets/runs}"
 # What the child Python processes see. 02 overrides it to SRC, 03/04 to LOCAL.
 RUNS_ROOT="${RUNS_ROOT:-$RUNS_LOCAL}"
 export RUNS_ROOT
 
 # Block writes into the source tree (build_swa.py creates <run>/checkpoints/swa).
+# With SRC_REPO unset there is no source tree to protect — and the pattern would otherwise
+# degenerate to `/*`, which matches every absolute path and would refuse every write.
 assert_writable_run() {
+  [ -n "${SRC_REPO:-}" ] || return 0
   case "$1" in
     "$SRC_REPO"/*) [ "${FORCE_SRC:-0}" = 1 ] || die "refusing to write into the source tree: $1
       $SRC_REPO is read-only. Use a run under $RUNS_LOCAL, or copy the epochs you need

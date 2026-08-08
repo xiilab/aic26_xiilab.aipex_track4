@@ -77,8 +77,9 @@ MR="assets/model"; [ "$REP" = 1 ] && MR="assets/model_rep"
 
 MEMBERS=(internvl_r32 llama 8b qwen3vl_2b pixtral ovis jina_m0)
 
-# Smoke isolation. The seven assets/cache/s2_rerank/*_union_cache.pt files are **git-tracked
-#   content shipped with the repository**; overwriting them with an 8-query stub destroys them.
+# Smoke isolation. The seven assets/cache/s2_rerank/*_union_cache.pt files are **the downloaded
+#   caches, and nothing regenerates them cheaply**; overwriting them with an 8-query stub destroys
+#   them.
 #   --rep forces the scorer's WORKDIR to cache_rep and makes isolation impossible, so REP stays 0
 #   and WORKDIR is redirected by hand. The candidate pool is linked from the adopted cache's
 #   union_pool.pt (the cache_rep one does not exist until 04 --build has run).

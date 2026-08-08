@@ -2,7 +2,19 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VARIANT="${1:-best}"
 COMB_W_ENV="${COMB_W:-}"        # the script fills COMB_W itself, so remember any externally supplied value
-PY="${PY:-/opt/conda/bin/python}"
+# Interpreter: whatever has requirements/core.txt installed. PY=<path> overrides; otherwise take the
+# first of the active env, python3, python. The replay imports only torch and numpy.
+if [ -z "${PY:-}" ]; then
+  for _c in "${CONDA_PREFIX:-}/bin/python" python3 python; do
+    [ -n "$_c" ] && command -v "$_c" >/dev/null 2>&1 && { PY="$_c"; break; }
+  done
+fi
+[ -n "${PY:-}" ] || { echo "✗ no python found. Install requirements/core.txt and set PY=<interpreter>."; exit 1; }
+command -v "$PY" >/dev/null 2>&1 || { echo "✗ PY=$PY is not executable."; exit 1; }
+"$PY" -c "import torch, numpy" 2>/dev/null || {
+  echo "✗ $PY cannot import torch/numpy."
+  echo "  pip install -r requirements/core.txt --extra-index-url https://download.pytorch.org/whl/cu129"
+  echo "  or point PY= at an interpreter that already has them."; exit 1; }
 G="${G:-0}"
 WORK="${WORK:-$HERE/.work}"
 # cache root: assets/cache by default, assets/cache_rep when REP=1

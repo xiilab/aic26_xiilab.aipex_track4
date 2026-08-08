@@ -39,7 +39,7 @@ The range comes from [`mc2h378_peft_heldout/search_swa_range.py`](../mc2h378_pef
 | `assets/data/manifest/pab_manifest_msr_v2.jsonl` | `python train/gen/gen_manifest.py` |
 | `assets/data/raw/pab_train/train_jpg_512` | dataset symlink |
 | HF cache for `facebook/metaclip-2-worldwide-huge-378` | `huggingface-cli download` |
-| `assets/data/manifest/mc2h378_selfresidual_neighbors.pt` | shipped with the repository |
+| `assets/data/manifest/mc2h378_selfresidual_neighbors.pt` | in the Drive bundle |
 
 ## Files
 

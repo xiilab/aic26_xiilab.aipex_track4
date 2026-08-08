@@ -42,7 +42,7 @@ python build_manifest.py
 python build_negcache.py --gpu 6
 
 # 3. train
-/opt/conda/bin/python3.11 -u train.py --gpu 6
+python -u train.py --gpu 6
 ```
 
 Step 1 is optional when the bundled manifest under `assets/data/mining/` is present; it is only

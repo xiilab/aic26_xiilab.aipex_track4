@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# Create the five conda environments for PAB Track4. env-to-script mapping and pins: README.md.
-# Also creates the empty asset/result directories, which git cannot carry.
+# Create the five training/scoring conda environments for PAB Track4 — track4_{train,beit3,gme,
+# llm2clip,vllm}. env-to-script mapping and pins: README.md. It also runs setup_assets.sh, which
+# creates the empty asset/result directories git cannot carry.
+#
+# core.txt is not one of them: reproduction needs nothing but torch and numpy, so install it into
+# whatever environment you already have —
+#   pip install -r requirements/core.txt --extra-index-url https://download.pytorch.org/whl/cu129
+#
 # requirements/*.txt pin +cuXXX local-version wheels, so pip needs the PyTorch index added
 # (the files themselves carry no --extra-index-url):
 #   core / train / beit3 / gme / llm2clip → cu129

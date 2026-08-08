@@ -14,7 +14,7 @@ side:
 Input  NEG_CACHE (.pt) from `build_negcache.py`; its absence stops the run at an assert.
        The cache exists so that peft and the anchor encoder run in separate processes.
 Run    Single GPU. Hyper-parameters are edited directly in the `1. Config` constants below.
-        /opt/conda/bin/python3.11 -u train.py --gpu 6
+        python -u train.py --gpu 6
 """
 import argparse, json, math, os, random, sys, time
 from collections import Counter, defaultdict

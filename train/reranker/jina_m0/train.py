@@ -16,7 +16,7 @@ jina specifics:
   · The score MLP head stays frozen — only the DoRA adapter on the text decoder is trained.
 
 Input  NEG_CACHE = the `build_negcache.py` output (shared with qwen3vl_2b).
-Run    /opt/conda/bin/python3.11 -u train.py --gpu 6
+Run    python -u train.py --gpu 6
        Hyper-parameters are edited directly in the `1. Config` constants below.
 """
 import argparse, json, math, os, random, sys, time

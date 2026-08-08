@@ -102,11 +102,10 @@ bash ops/01_stage_assets.sh --check                  # check only
 MODE=copy bash ops/01_stage_assets.sh --only heldout # copy just the small ones (8.2M)
 ```
 
-Two paths are left alone, because replacing them wholesale deletes git-tracked files:
+Two paths are left alone, because replacing them wholesale drops whatever is already in place:
 
-- **`assets/cache`** — the repository ships 22 real files (`union_pool.pt` · `*_union_cache.pt` ·
-  `fuse_cache/*.npy`, 14M). The large ones (`base_score.pt` · `s4_nn/*`) are not included; build
-  them by encoding or copy them in individually. `01` reports which are missing.
+- **`assets/cache`** — downloaded from the Drive bundle, or produced by `04`/`05`. Its four subtrees
+  fill at different times, so only its status is reported; `01` names which files are missing.
 - **`assets/model`** — its four children (`encoder`·`hf_cache`·`reranker`·`vlm_models`) are staged
   individually rather than the parent.
 
