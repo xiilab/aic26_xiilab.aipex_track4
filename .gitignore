@@ -87,6 +87,6 @@ assets/cache_rep/**
 
 # git cannot carry empty directories, so `assets/` keeps one placeholder (assets/.gitkeep) and a
 # clone gets the mount point itself. Everything under it stays ignored by the rules above.
-# The subdirectories are created by requirements/setup_conda_envs.sh; run_reproduce.sh creates its
-# own output paths.
+# The subdirectories are created by setup_assets.sh (which setup_conda_envs.sh also calls);
+# run_reproduce.sh creates its own output paths.
 .claude/

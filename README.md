@@ -1,7 +1,27 @@
-# PRC — Preserving Priors, Resolving Collisions
+# Preserving Priors, Resolving Collisions: Complementary Reranking and Injective Assignment for Text-Based Person Re-Identification
 
-Complementary reranking and injective assignment for **text-based person anomaly retrieval**.
 Track 4, 10th AI City Challenge · **ECCV 2026 Workshops** · Team **Xiilab.AIpex**
+
+## Abstract
+
+Text-based person anomaly search trained exclusively on diffusion-generated images faces both a
+substantial synthetic-to-real domain shift and fine-grained ambiguity among visually similar
+candidates. Our adapted anchor retrieves the ground truth within the top-10 for 99.44% of the 1,978
+official queries but reaches only 87.11 R@1, indicating that the remaining errors primarily concern
+local candidate ordering and cross-query collisions rather than candidate coverage. We therefore
+introduce PRC, a deterministic pipeline that combines prior-preserving adaptation, complementary
+candidate reranking, and structure-conditional decoding. First, multi-style recaptioning and
+frozen-backbone DoRA adapt the retrieval anchor while updating 1.7% of its parameters. With the
+training recipe held fixed, the DoRA-based recipe achieves 92.32 mAP@10, compared with 90.30 for
+matched full fine-tuning; on the unseen UCC domain, R@1 follows the same ordering — 37.39 for
+zero-shot, 71.18 for full fine-tuning, and 80.55 for ours — under the same backbone and the same
+evaluation captions. Second, a compact candidate union from complementary encoder families is
+reassessed by heterogeneous cross-encoders, including rerankers trained on mined hard-negative
+preferences. These gains transfer without further tuning to UCC, RSTPReid, and UCA, yielding gains
+of 5 to 19 points in multi-positive mAP. Third, injective assignment uses PAB's one-query–one-answer
+structure to resolve duplicate top-1 assignments, reassigning the top-ranked image for each affected
+query. The complete system achieves 99.3020 mAP@10, ranking first in Track 4 of the 10th AI City
+Challenge.
 
 ![PRC pipeline](docs/fig1_pipeline.png)
 
@@ -56,15 +76,20 @@ Extra environments are only needed to re-train or re-score:
 
 ### Data setup
 
+`assets/` ships empty with the clone and everything under it is ignored by git, so create the
+directory tree first — then unpack or symlink the download into it:
+
+```bash
+bash setup_assets.sh          # create the assets/ + results/ tree (--check reports what is filled)
+```
+
 Point `assets/data/raw/pab_test` at the Track 4 test set:
 
 ```bash
-mkdir -p assets/data/raw
 ln -s /path/to/name-masked_test-set  assets/data/raw/pab_test
 ```
 
-The other datasets follow the same pattern. `assets/` ships empty with the clone and everything
-under it is ignored by git; `requirements/setup_conda_envs.sh` creates the subdirectories.
+The other datasets follow the same pattern.
 
 | path | contents | needed for |
 |---|---|---|
@@ -93,10 +118,10 @@ The bundle mirrors the repository layout, so each tree can be copied or symlinke
 | `assets/cache/s4_nn/` | 6 tail-NN embedding files | shipped |
 | `assets/cache/s4_tail/` | `{internvl_r32,jina_m0,llama}_nntail_cache.pt` | shipped |
 
-Large files are not tracked in git — see [`ARTIFACTS.md`](ARTIFACTS.md) for the bundle, the full
-`assets/` layout and its checksums. `run_reproduce.sh` verifies every path it consumes before doing
-any work and names whatever is missing (`s1_base/members/` is not checked, being an input to
-`build_base.py` only).
+`bash setup_assets.sh --check` lists these trees with what each still needs. Large files are not
+tracked in git — see [`ARTIFACTS.md`](ARTIFACTS.md) for the bundle, the full `assets/` layout and its
+checksums. `run_reproduce.sh` verifies every path it consumes before doing any work and names
+whatever is missing (`s1_base/members/` is not checked, being an input to `build_base.py` only).
 
 ### Run reproduce
 
@@ -129,6 +154,8 @@ caches. This needs GPUs; the replay above does not.
 
 `ops/` drives it. Every script takes `DRY=1` (or `--dry-run`) to print what it would run, and
 `--list` to show the per-artifact state:
+
+Before running the commands below, download all required pretrained models and checkpoints listed in [Pretrained checkpoints](#pretrained-checkpoints) and place them under `assets/model/` using the specified directory structure.
 
 ```bash
 bash ops/01_stage_assets.sh --check    # what is missing
@@ -189,6 +216,7 @@ python train/reranker/eval/eval_step.py    --member dora --run <run> --steps <s1
 ### Repository layout
 
 ```
+setup_assets.sh                                               create the assets/ + results/ tree
 run_reproduce.sh · run_submission.py                          reproduction / inference entrypoints
 pipeline/     S1_base · S2_rerank · S3_assign · S4_tail       the submitted pipeline
 train/        encoders/ · reranker/ · gen/ · eval/            training & selection
@@ -254,14 +282,37 @@ InternVL3.5-30B-A3B-HF under `assets/model/vlm_models/` (override with `VLM_MODE
 Build once; shared by every encoder and reranker.
 
 ```bash
+# recaptions — 11 styles per image, needs a Qwen3-VL-30B OpenAI-compatible endpoint
+python train/gen/msr_axes_generate.py --endpoint http://127.0.0.1:8000
+
 # caption manifests — msr v1 / v2 / v1_scene
 python train/gen/gen_manifest.py
+
+# open_clip two-column csv — metaclip_v1 only
+python train/gen/gen_metaclip_v1_csv.py
 
 # held-out split — DINOv2 near-duplicate components, group-level exclusion
 python train/gen/gen_heldout_v1.py --gpu 0
 ```
 
-Both skip when their output is already present; pass `--force` to rebuild.
+All four skip when their output is already present; pass `--force` to rebuild. The recaption CSVs
+ship under `assets/data/raw/recaption/`, and one pass is ~1M images × 11 styles — regenerate only to
+change the caption set. Run order and every flag: [`train/gen/README.md`](train/gen/README.md).
+
+BEiT3 reads a pair index rather than a manifest and builds its own with `beit3_tool.py` —
+that is step 1 of [`beit3`](#beit3) below.
+
+Each reranker then mines its own training data. All of it ships under `assets/data/mining/`, so
+these steps are only needed to rebuild from different sources; the full command lines sit with each
+member in [4. Rerankers](#4-rerankers).
+
+| member | builders | produces |
+|---|---|---|
+| `qwen3vl_2b` | `build_manifest.py` → `build_negcache.py` | recap positives + flip captions, then hard image negatives from the anchor encoder's top-1 failures |
+| `jina_m0` | `build_negcache.py` | the `qwen3vl_2b` cache plus action hard negatives |
+| `internvl_r32` | `mine_hardneg.py` → `build_rescue_pairs.py` · `build_antibreak_pairs.py` | preference pairs — `A_rescue` recovers base failures, `B_antibreak` guards correct ones — merged into `dpo_train.jsonl` |
+
+Every builder refuses to overwrite an existing output; pass `--force` to rebuild.
 
 ### 3. Encoders
 

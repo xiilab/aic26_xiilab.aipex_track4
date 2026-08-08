@@ -44,14 +44,6 @@ ENVS=(
   "vllm:vllm.txt:$CU130"
 )
 
-# Directories git cannot carry, since git tracks files and these start out empty. Created here rather
-# than kept alive with placeholder files. Everything deeper is created by whichever script writes it.
-DIRS=(
-  assets assets/cache assets/cache_rep assets/data assets/data/raw
-  assets/model assets/model_rep assets/runs
-  results results/reproduced
-)
-
 # Packages that cannot live in a requirements file: their own pins conflict with this env's, and pip
 # accepts --no-deps only as a command-line flag. torchscale pins fairscale==0.4.0 and timm==0.4.12
 # but uses only fairscale.nn.{checkpoint_wrapper,wrap} and timm.models.layers.drop_path, both present
@@ -77,8 +69,11 @@ echo "[setup] conda=$CONDA_BASE · python=$PYVER · prefix=$PREFIX · $([ "$DRY"
 df -h "$CONDA_BASE" | awk 'NR==2{printf "  disk: %s free (%s used) — the five envs need tens of GB\n",$4,$5}'
 echo
 
+# The assets/ and results/ skeleton git cannot carry, since git tracks files and these start out
+# empty. setup_assets.sh owns the list, so it is not duplicated here; it needs no conda and can be
+# run on its own before the environments exist.
 echo "──────── directories ────────"
-for d in "${DIRS[@]}"; do run mkdir -p "$REPO/$d"; done
+run bash "$REPO/setup_assets.sh"
 echo
 
 for row in "${ENVS[@]}"; do
