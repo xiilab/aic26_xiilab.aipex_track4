@@ -7,7 +7,7 @@
 #
 # Each model has its own deploy.py (tools/promote.py is the generic manual alternative).
 #   SWA family (anchor_tcap·anchor_filip·mc2h378_peft): build_swa.py <run> lo hi, then deploy.py <run>
-#   metaclip2 : deploy.py <run> --epoch N          (checkpoints/epNN)
+#   metaclip2 : deploy.py <run>                    (checkpoints/swa — the run ships it prebuilt)
 #   beit3     : deploy.py <run> --recipe v2|helip --epoch N   (checkpoint-N.pth -> checkpoint-best.pth)
 #   metaclip_v1: deploy.py <ckpt_dir> --epoch N    (epoch_N.pt)
 #   rerankers : deploy.py <run> --step <t*>
@@ -90,7 +90,10 @@ dep_swa() {   # $1=name  $2=range(lo-hi)
   fi
   run "$PY" "train/encoders/${name}_all/deploy.py" "$rd"
 }
-dep_metaclip2()  { run "$PY" train/encoders/metaclip2/deploy.py "${MC2_RUN:-$(resolve_run_with_ckpt "${RUN_CAND[metaclip2]}")}" --epoch "$1"; }
+# metaclip2 is SWA-deployed like the anchor family, but its scripts live in train/encoders/metaclip2
+# (no _all suffix) and the run it ships already carries checkpoints/swa, so nothing is rebuilt here.
+# Its deploy.py takes the run directory alone — passing --epoch is what used to break --adopted.
+dep_metaclip2()  { run "$PY" train/encoders/metaclip2/deploy.py "${MC2_RUN:-$(resolve_run_with_ckpt "${RUN_CAND[metaclip2]}")}"; }
 dep_beit3_v2()   { run "$PY" train/encoders/beit3/deploy.py "$(resolve_run_with_ckpt "${RUN_CAND[beit3_v2]}")"    --recipe v2    --epoch "$1"; }
 dep_beit3_helip(){ run "$PY" train/encoders/beit3/deploy.py "$(resolve_run_with_ckpt "${RUN_CAND[beit3_helip]}")" --recipe helip --epoch "$1"; }
 dep_metaclip_v1(){ run "$PY" train/encoders/metaclip_v1/deploy.py "$(resolve_run_with_ckpt "${RUN_CAND[metaclip_v1]}")/checkpoints" --epoch "$1"; }
@@ -104,7 +107,8 @@ deploy_one() {
   say "[03] $m  <- $kind $val"
   case "$m" in
     anchor_tcap|anchor_filip|mc2h378_peft) dep_swa "$m" "$val" ;;
-    metaclip2|beit3_v2|beit3_helip|metaclip_v1) "dep_$m" "${val#ep}" ;;
+    metaclip2)                             dep_metaclip2 ;;
+    beit3_v2|beit3_helip|metaclip_v1)      "dep_$m" "${val#ep}" ;;
     internvl_r32|jina_m0|qwen3vl_2b)       "dep_$m" "$val" ;;
     *) die "unknown model: $m" ;;
   esac
@@ -122,7 +126,7 @@ fi
 
 for m in "${TARGETS[@]}"; do echo; deploy_one "$m" "$PICK"; done
 
-echo
+ech
 say "[03] deployment result"
 find assets/model_rep -mindepth 2 -maxdepth 2 -type d 2>/dev/null \
   | sed "s|assets/model_rep/||" | sort | sed 's/^/  /'

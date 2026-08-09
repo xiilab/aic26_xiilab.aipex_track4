@@ -71,7 +71,7 @@ declare -A ADOPTED=(
   [anchor_tcap]="swa:8-10"      # build_swa.py <run> 8 10
   [anchor_filip]="swa:8-10"
   [mc2h378_peft]="swa:2-4"
-  [metaclip2]="ep:2"
+  [metaclip2]="swa:2-4"        # metaclip2_all/checkpoints/swa (its deploy.py reads swa, not epNN)
   [beit3_v2]="ep:3"             # checkpoint-3.pth
   [beit3_helip]="ep:2"          # checkpoint-2.pth
   [metaclip_v1]="ep:4"          # epoch_4.pt
@@ -87,7 +87,11 @@ declare -A RUN_CAND=(
   [anchor_tcap]="anchor_tcap_all"
   [anchor_filip]="anchor_filip_all"
   [mc2h378_peft]="mc2h378_peft_all"
-  [metaclip2]="metaclip2_FULL 20260609_070733_mc2_l14_distill_ddp_w5 mc2_l14_all_w5_e2_FULL"
+  # metaclip2_all is the run this bundle ships, and it carries checkpoints/swa (2-4). It must stay
+  # first: metaclip2_FULL and the 20260609 run are not in the bundle at all, and falling through to
+  # mc2_l14_all_w5_e2_FULL — which holds only an interrupted checkpoints/last — silently deploys
+  # weights that are neither the SWA nor any epoch.
+  [metaclip2]="metaclip2_all metaclip2_FULL 20260609_070733_mc2_l14_distill_ddp_w5 mc2_l14_all_w5_e2_FULL"
   [beit3_v2]="beit3_v2_FULL"
   [beit3_helip]="beit3_helip_FULL"
   [metaclip_v1]="metaclip_v1_FULL"
