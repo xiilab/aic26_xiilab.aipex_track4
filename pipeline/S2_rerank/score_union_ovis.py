@@ -55,7 +55,6 @@ print(f"[union] {len(qorder)} queries, sizes ~{sum(len(u) for u in union)/len(un
 
 from transformers import AutoConfig, AutoModel, AutoModelForCausalLM   # noqa: E402
 from transformers.dynamic_module_utils import get_class_from_dynamic_module   # noqa: E402
-
 t0 = time.time()
 # Work around the Ovis2.5 remote code being loaded twice: auto_map's AutoConfig builds the config
 # from a module copy containing only configuration_*.py, while modeling_*.py calls AutoModel.register

@@ -43,16 +43,26 @@ bash ops/01_stage_assets.sh              # stage (symlinks by default)
 
 bash ops/02_select.sh --list             # targets and the adopted baseline
 bash ops/03_deploy.sh --adopted          # <- skip selection, deploy the adopted values
-bash ops/04_encode.sh --list
-bash ops/04_encode.sh --smoke metaclip2  # quick check of one member
-bash ops/04_encode.sh --all              # 10 members
-bash ops/04_encode.sh --tail             # the 6 s4_nn encoders
-bash ops/04_encode.sh --build            # base + union_pool (from scratch)
-bash ops/05_rerank.sh --smoke jina_m0    # quick check of one S2 member
-bash ops/05_rerank.sh --all              # the 7 S2 rerankers (heaviest GPU stage)
-bash ops/05_rerank.sh --fuse             # the 3 fuse_cache dumps
-bash run_reproduce.sh best               # final answer
+
+# Reproduction run: REP=1 everywhere. It reads model_rep and writes cache_rep, leaving the
+# shipped assets/cache untouched. Dropping it on any one line mixes the two roots.
+REP=1 bash ops/04_encode.sh --list
+     bash ops/04_encode.sh --smoke metaclip2   # smoke forces REP=0 into ops/smoke/ — never a rep artifact
+REP=1 bash ops/04_encode.sh --all              # 10 members
+REP=1 bash ops/04_encode.sh --tail             # the 6 s4_nn encoders
+REP=1 bash ops/04_encode.sh --build            # base + union_pool (from scratch)
+     bash ops/05_rerank.sh --smoke jina_m0     # quick check of one S2 member
+REP=1 bash ops/05_rerank.sh --all              # the 7 S2 rerankers (heaviest GPU stage)
+REP=1 bash ops/05_rerank.sh --recs             # assemble recs_*.pt (no GPU)
+REP=1 bash ops/05_rerank.sh --fuse             # the 3 fuse_cache dumps
+REP=1 bash run_reproduce.sh best               # final answer
 ```
+
+**`REP=1` is not optional here.** Every line above defaults to `REP=0`, which reads the adopted
+`assets/model/` and **overwrites the shipped `assets/cache/`** — including the git-tracked
+`s2_rerank/*_union_cache.pt` (05 warns about this at run time). Re-creating the adopted caches on
+purpose is the one case where you leave it off; that path needs no `03_deploy.sh` at all, since
+`assets/model/` already holds the adopted weights. See §6 for the roots themselves.
 
 To choose everything yourself, replace `03_deploy.sh --adopted` with `02_select.sh <model>` then
 `03_deploy.sh <model> --pick <value>`.
@@ -67,10 +77,10 @@ successful install does not mean a working env, so doctor runs the real imports 
 | env | transformers | used by |
 |---|---|---|
 | `track4_train` | 5.4.0 | training · `encode_metaclip2` · `encode_mc2h378` · `encode_anchor_*` · `encode_qwen3vl_embed` |
-| `track4_beit3` | 4.30.2 | `encode_beit3` · `encode_eva02` · `encode_metaclip` · `encode_gallery_emb` (torchscale·timm·open_clip) |
+| `track4_beit3` | 4.30.2 | `encode_beit3` · `encode_eva02` · `encode_metaclip` · `encode_gallery_emb` · `encode_siglip_maxsim --stage maxsim` (torchscale·timm·open_clip) |
 | `track4_gme` | 4.51.3 | `encode_gme` |
-| `track4_llm2clip` | 4.56.2 | `encode_siglip_maxsim` · `encode_llm2clip_anchor5` |
-| `track4_vllm` | 5.9.0 | the S2 reranker scorers · `dump_fuse_cache` (torch 2.11+cu130) |
+| `track4_llm2clip` | 4.56.2 | `encode_siglip_maxsim --stage base` · `encode_llm2clip_anchor5` · `score_union_ovis` (needs transformers 4.x) |
+| `track4_vllm` | 5.9.0 | the S2 reranker scorers except ovis · `dump_fuse_cache` (torch 2.11+cu130) |
 
 `core/train/beit3/gme/llm2clip` use cu129 wheels; only `vllm` uses cu130. A CUDA 13.0 driver runs
 both. Version-pin rationale is in [`../requirements/README.md`](../requirements/README.md).
@@ -134,6 +144,7 @@ Each family uses a different tool; the script picks it:
 | family | tool |
 |---|---|
 | anchor_tcap · anchor_filip · mc2h378_peft · metaclip2 | `train/encoders/eval/eval_heldout.py` (adapters) |
+| siglip_maxsim | `train/encoders/siglip_maxsim_heldout/search_swa_range.py` — the only member with no built-in SWA range, so 02 searches the range itself instead of scoring epochs |
 | beit3_v2 · beit3_helip | `train/encoders/beit3/beit3_tool.py eval` |
 | metaclip_v1 | `train/encoders/eval/eval_heldout_openclip.py` (full FT) |
 | the three rerankers | `train/reranker/eval/eval_step.py` (pair accuracy) |

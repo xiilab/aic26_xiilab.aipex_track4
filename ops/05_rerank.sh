@@ -3,7 +3,8 @@
 # 05_rerank.sh — the seven S2 rerankers re-score the union pool -> cache_rep/s2_rerank/
 #                plus the three fuse_cache dumps S3 reads
 #
-# All of them run in **track4_vllm**. This is the most GPU-expensive stage of the pipeline, so
+# They run in **track4_vllm**, except ovis, which needs transformers 4.x and runs in
+# **track4_llm2clip** (PY_OVIS). This is the most GPU-expensive stage of the pipeline, so
 # splitting it per member (--slice) or running it in the background is usually better.
 #
 #   member        script                        model                             note
@@ -12,7 +13,7 @@
 #   8b            score_union_qwen_4b.py        Qwen3-VL-Reranker-8B              reuses recs
 #   qwen3vl_2b    score_union_qwen_4b.py        Qwen3-VL 2B + DoRA                reuses recs
 #   pixtral       score_union_pixtral_4b.py     Pixtral-12B-2409                  zero-shot
-#   ovis          score_union_ovis.py           Ovis2.5-9B                        zero-shot
+#   ovis          score_union_ovis.py           Ovis2.5-9B                        zero-shot · tf 4.x
 #   jina_m0       score_union_jina.py           jina-reranker-m0 + adapter
 #
 #   The three fuse_cache dumps (read by IV_CACHE in S3 fuse.py — fixed top-20 column format):
@@ -77,12 +78,10 @@ MR="assets/model"; [ "$REP" = 1 ] && MR="assets/model_rep"
 
 MEMBERS=(internvl_r32 llama 8b qwen3vl_2b pixtral ovis jina_m0)
 
-# Smoke isolation. The seven assets/cache/s2_rerank/*_union_cache.pt files are **the downloaded
-#   caches, and nothing regenerates them cheaply**; overwriting them with an 8-query stub destroys
-#   them.
-#   --rep forces the scorer's WORKDIR to cache_rep and makes isolation impossible, so REP stays 0
-#   and WORKDIR is redirected by hand. The candidate pool is linked from the adopted cache's
-#   union_pool.pt (the cache_rep one does not exist until 04 --build has run).
+PY_OVIS="${PY_OVIS:-$PY_LLM2CLIP}"
+
+# Smoke never writes a canonical cache: the downloaded *_union_cache.pt cannot be regenerated
+# cheaply. --rep would force WORKDIR to cache_rep, so REP stays 0 and WORKDIR is redirected here.
 if [ "$SMOKE" = 1 ]; then
   REP=0; RF=()
   CACHE="assets/cache"
@@ -154,8 +153,9 @@ rr_pixtral() {
   run "${SENV[@]}" CUDA_VISIBLE_DEVICES="$GPU" "$PY_VLLM" $S2/score_union_pixtral_4b.py \
     --name pixtral "${RF[@]+"${RF[@]}"}" "${LIM[@]+"${LIM[@]}"}"
 }
-rr_ovis() {
-  run "${SENV[@]}" CUDA_VISIBLE_DEVICES="$GPU" "$PY_VLLM" $S2/score_union_ovis.py \
+rr_ovis() {   # track4_llm2clip (transformers 4.x), not track4_vllm — see PY_OVIS above
+  need_py "$PY_OVIS" llm2clip
+  run "${SENV[@]}" CUDA_VISIBLE_DEVICES="$GPU" "$PY_OVIS" $S2/score_union_ovis.py \
     --model "$VLM/Ovis2.5-9B" --name ovis "${RF[@]+"${RF[@]}"}" "${LIM[@]+"${LIM[@]}"}"
 }
 rr_jina_m0() {
@@ -165,7 +165,7 @@ rr_jina_m0() {
 
 # ── Listing ────────────────────────────────────────────────────────────────
 if [ "$LIST" = 1 ]; then
-  say "[05] 7 S2 rerankers · REP=$REP -> $RR   (env=track4_vllm · GPU=$GPU)"
+  say "[05] 7 S2 rerankers · REP=$REP -> $RR   (env=track4_vllm, ovis=track4_llm2clip · GPU=$GPU)"
   printf '  %-14s %-26s %-34s %s\n' "member" "script" "model" "state"
   printf '  %-14s %-26s %-34s %s\n' "-------------" "-------------------------" "---------------------------------" "-----"
   declare -A SC=( [internvl_r32]=score_union_hf_4b [llama]=score_union_hf_4b
@@ -281,4 +281,6 @@ if [ -n "$FAILED" ]; then
   echo; warn "failed members:$FAILED"
 fi
 echo
-echo "  next: bash ops/05_rerank.sh --fuse"
+# --recs comes first: it is assembled *from* the union caches that just finished, and --fuse reads
+# the dump it produces. Skipping it leaves 8b/qwen3vl_2b scoring the full pool on the next run.
+echo "  next: bash ops/05_rerank.sh --recs   then   bash ops/05_rerank.sh --fuse"

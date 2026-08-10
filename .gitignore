@@ -3,6 +3,9 @@
 fullpipe/
 *.log
 
+# Smoke-run output (04/05 --smoke redirect here so a truncated artifact never lands in a cache)
+ops/smoke/
+
 # Personal local tool settings (recreated on permission approval) — not shared
 .claude/
 

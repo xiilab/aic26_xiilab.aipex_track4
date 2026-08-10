@@ -252,6 +252,23 @@ third_party/  beit3 (upstream, unmodified + helip · falcon · tic extensions)
 docs/         fig1_pipeline.{png,pdf}
 ```
 
+### Two roots, one switch: `REP`
+
+Weights and caches come in pairs — adopted and reproduced — and one environment variable picks
+which pair every stage script reads and writes.
+
+| | flow | use it when |
+|---|---|---|
+| `REP=0` (default) | `assets/model/` → `04`/`05` → `assets/cache/` | re-creating the adopted caches. The shipped weights are already in place, so no deployment step. |
+| `REP=1` | `assets/runs/` → `02_select.sh` → `03_deploy.sh` → `assets/model_rep/` → `04`/`05` → `assets/cache_rep/` | reproducing the pipeline from your own training |
+
+The switch keeps the pairing intact end to end: a cache built from `model_rep` lands in
+`cache_rep`, never in `cache`. `assets/model/` is never written by any script, so the adopted
+artifacts stay intact for md5 comparison.
+
+Beware the default: `ops/04_encode.sh --all` or `ops/05_rerank.sh --all` without `REP=1`
+**overwrites** the shipped `assets/cache/`. Set `REP=1` unless that is what you want.
+
 Members: 10 base encoders (S1) · 7 rerankers (S2–S4) · 3 embedders (S4b).
 Weights live in one place — `tools/ensemble/weights/final.json`, read through
 `tools/ensemble/adopted.py`.

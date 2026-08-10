@@ -91,7 +91,8 @@ def flush():
     r = score_msgs(buf_msgs)
     for (q, c), val in zip(buf_loc, r): out[(q, c)] = val; nnew += 1
     buf_msgs = []; buf_loc = []
-for i, q in enumerate(qorder):
+qs = qorder[:a.limit] if a.limit else qorder      # --limit was declared but never applied: a smoke
+for i, q in enumerate(qs):                        # run scored all 1978 queries (~1 h) instead of 8
     ptxt = PROMPT.format(cap=cap[q])
     for c in union[i]:
         if (q, c) in reuse: out[(q, c)] = reuse[(q, c)]
@@ -102,8 +103,8 @@ for i, q in enumerate(qorder):
             buf_loc.append((q, c))
     if len(buf_msgs) >= 800:
         flush()
-        el = time.time() - t0; print(f"  {i+1}/{len(qorder)} new={nnew} ({el:.0f}s)", flush=True)
+        el = time.time() - t0; print(f"  {i+1}/{len(qs)} new={nnew} ({el:.0f}s)", flush=True)
         if len(imgc) > 3000: imgc.clear()
 flush()
-torch.save({"scores": out, "qorder": qorder, "name": a.name, "nnew": nnew}, f"{HERE}/{a.name}_{os.environ.get('OUT_SUFFIX','union_cache')}.pt")
+torch.save({"scores": out, "qorder": qs, "name": a.name, "nnew": nnew}, f"{HERE}/{a.name}_{os.environ.get('OUT_SUFFIX','union_cache')}.pt")
 print(f"[done] pixtral_union_cache.pt pairs={len(out)} new={nnew} ({time.time()-t0:.0f}s)", flush=True)

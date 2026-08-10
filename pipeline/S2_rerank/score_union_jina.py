@@ -49,10 +49,22 @@ cap = {json.loads(l)["query_index"]: json.loads(l)["caption"] for l in open(QJSO
 U = torch.load(f"{HERE}/{os.environ.get('POOL_FILE','union_pool.pt')}"); union = U["union"]; qorder = U["qorder"]
 print(f"[union] {len(qorder)}q total={sum(len(u) for u in union)} pairs", flush=True)
 
+import transformers                                             # noqa: E402  (version-gated shim below)
 from transformers import AutoModel, AutoProcessor, Qwen2VLForConditionalGeneration
 from peft import PeftModel
+
+KEY_MAP = {"^visual": "model.visual", r"^model(?!\.(language_model|visual))": "model.language_model"}
+LOAD_KW = {"key_mapping": KEY_MAP} if int(transformers.__version__.split(".")[0]) >= 5 else {}
+
 dev = "cuda:0"; t0 = time.time()
-base = AutoModel.from_pretrained(JINA, trust_remote_code=True, torch_dtype=torch.bfloat16)
+base, _info = AutoModel.from_pretrained(JINA, trust_remote_code=True, torch_dtype=torch.bfloat16,
+                                        output_loading_info=True, **LOAD_KW)
+
+_miss = sorted(_info.get("missing_keys") or [])
+if _miss:
+    raise SystemExit(f"  ✗ {len(_miss)} weights were newly initialised instead of loaded, e.g. "
+                     f"{_miss[:3]} — the {JINA} checkpoint no longer matches the model's key names "
+                     f"under transformers {transformers.__version__}. Update KEY_MAP.")
 proc = AutoProcessor.from_pretrained(JINA, trust_remote_code=True, min_pixels=IMG_MIN, max_pixels=IMG_MAX)
 proc.tokenizer.padding_side = "left"
 sc_tok = int(getattr(base, "score_token_id", SCORE_TOKEN_ID))

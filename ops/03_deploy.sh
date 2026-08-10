@@ -90,13 +90,22 @@ dep_swa() {   # $1=name  $2=range(lo-hi)
   fi
   run "$PY" "train/encoders/${name}_all/deploy.py" "$rd"
 }
-# metaclip2 is SWA-deployed like the anchor family, but its scripts live in train/encoders/metaclip2
-# (no _all suffix) and the run it ships already carries checkpoints/swa, so nothing is rebuilt here.
-# Its deploy.py takes the run directory alone — passing --epoch is what used to break --adopted.
+
 dep_metaclip2()  { run "$PY" train/encoders/metaclip2/deploy.py "${MC2_RUN:-$(resolve_run_with_ckpt "${RUN_CAND[metaclip2]}")}"; }
 dep_beit3_v2()   { run "$PY" train/encoders/beit3/deploy.py "$(resolve_run_with_ckpt "${RUN_CAND[beit3_v2]}")"    --recipe v2    --epoch "$1"; }
 dep_beit3_helip(){ run "$PY" train/encoders/beit3/deploy.py "$(resolve_run_with_ckpt "${RUN_CAND[beit3_helip]}")" --recipe helip --epoch "$1"; }
 dep_metaclip_v1(){ run "$PY" train/encoders/metaclip_v1/deploy.py "$(resolve_run_with_ckpt "${RUN_CAND[metaclip_v1]}")/checkpoints" --epoch "$1"; }
+dep_llm2clip_anchor5(){
+  local ck="$1" trun vrun
+  # resolve_run exits non-zero when the run is absent, which under `set -e` would kill the script
+  # before need_path can explain what to do — so swallow it, exactly as dep_swa does.
+  trun="${ANCHOR5_TEXT_RUN:-$(resolve_run "$R" "${RUN_CAND[llm2clip_anchor5]}" || true)}"
+  vrun="${ANCHOR5_VISION_RUN:-$(resolve_run "$R" llm2clip_vision_lora || true)}"
+  need_path "$trun" "no text-adapter run here — train one, or set ANCHOR5_TEXT_RUN"
+  need_path "$vrun" "no vision-LoRA run here — train one, or set ANCHOR5_VISION_RUN"
+  need_path "$trun/$ck" "pick an existing text-adapter checkpoint (ep{N} or last)"
+  run "$PY" train/encoders/llm2clip_anchor5/deploy.py --vision "$vrun" --text "$trun/$ck"
+}
 dep_internvl_r32(){ run "$PY" train/reranker/internvl_r32/deploy.py "$(resolve_run_with_ckpt "${RUN_CAND[internvl_r32]}")" --step "$1"; }
 dep_jina_m0()    { run "$PY" train/reranker/jina_m0/deploy.py    "$(resolve_run_with_ckpt "${RUN_CAND[jina_m0]}")"    --step "$1"; }
 dep_qwen3vl_2b() { run "$PY" train/reranker/qwen3vl_2b/deploy.py "$(resolve_run_with_ckpt "${RUN_CAND[qwen3vl_2b]}")" --step "$1"; }
@@ -104,18 +113,37 @@ dep_qwen3vl_2b() { run "$PY" train/reranker/qwen3vl_2b/deploy.py "$(resolve_run_
 deploy_one() {
   local m="$1" pick="$2" kind val
   kind="${ADOPTED[$m]%%:*}"; val="${pick:-${ADOPTED[$m]#*:}}"
-  say "[03] $m  <- $kind $val"
+  say "[03] $m  <- $kind ${val:-<pick>}"
+
+  if [ -z "$val" ]; then
+    die "$m has no adopted value in this bundle (REP=1 only — REP=0 reads assets/model directly):
+      bash ops/03_deploy.sh $m ${NEEDS_PICK[$m]}"
+  fi
   case "$m" in
-    anchor_tcap|anchor_filip|mc2h378_peft) dep_swa "$m" "$val" ;;
+    anchor_tcap|anchor_filip|mc2h378_peft|siglip_maxsim) dep_swa "$m" "$val" ;;
     metaclip2)                             dep_metaclip2 ;;
     beit3_v2|beit3_helip|metaclip_v1)      "dep_$m" "${val#ep}" ;;
     internvl_r32|jina_m0|qwen3vl_2b)       "dep_$m" "$val" ;;
+    llm2clip_anchor5)                      dep_llm2clip_anchor5 "$val" ;;
     *) die "unknown model: $m" ;;
   esac
 }
 
 MODELS=(anchor_tcap anchor_filip mc2h378_peft metaclip2 beit3_v2 beit3_helip metaclip_v1
         internvl_r32 jina_m0 qwen3vl_2b)
+# Left out of --adopted because the bundle records no value for them. Only REP=1 needs them —
+# with REP=0 both already sit in assets/model/encoder and nothing is deployed.
+declare -A NEEDS_PICK=(
+  [siglip_maxsim]="--pick <lo-hi>, the SWA range merged from the run (bash ops/02_select.sh siglip_maxsim)"
+  [llm2clip_anchor5]="--pick <ep{N}|last>, a checkpoint of the text-adapter run"
+)
+# What --adopted leaves undone. siglip_maxsim is an S1 member, so REP=1 encoding needs it; the
+# anchor5 pair is shipped ready to use, so 04 --tail falls back to it when nothing is deployed.
+declare -A SKIPPED=(
+  [siglip_maxsim]="not deployed — REP=1 encoding needs it: bash ops/03_deploy.sh siglip_maxsim ${NEEDS_PICK[siglip_maxsim]}"
+  [llm2clip_anchor5]="not deployed — 04 --tail falls back to the shipped copy. Deploy it to encode
+      with your own: bash ops/03_deploy.sh llm2clip_anchor5 ${NEEDS_PICK[llm2clip_anchor5]}"
+)
 
 if [ "$ADOPT" = 1 ]; then
   [ "${#TARGETS[@]}" -eq 0 ] || die "do not combine --adopted with an explicit model"
@@ -126,9 +154,14 @@ fi
 
 for m in "${TARGETS[@]}"; do echo; deploy_one "$m" "$PICK"; done
 
-ech
+echo
 say "[03] deployment result"
 find assets/model_rep -mindepth 2 -maxdepth 2 -type d 2>/dev/null \
   | sed "s|assets/model_rep/||" | sort | sed 's/^/  /'
+
+if [ "$ADOPT" = 1 ]; then
+  echo
+  for m in siglip_maxsim llm2clip_anchor5; do warn "$m ${SKIPPED[$m]}"; done
+fi
 echo
 ok "next: bash ops/04_encode.sh --list"

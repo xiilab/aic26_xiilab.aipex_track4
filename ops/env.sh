@@ -78,6 +78,8 @@ declare -A ADOPTED=(
   [internvl_r32]="step:2500"    # <run>/step2500
   [jina_m0]="step:ex008000"     # <run>/checkpoints/ex008000
   [qwen3vl_2b]="step:ex007000"
+  [siglip_maxsim]="swa:"
+  [llm2clip_anchor5]="ckpt:"
 )
 
 # ── Adopted run directories (relative to a run root) ───────────────────────
@@ -87,17 +89,15 @@ declare -A RUN_CAND=(
   [anchor_tcap]="anchor_tcap_all"
   [anchor_filip]="anchor_filip_all"
   [mc2h378_peft]="mc2h378_peft_all"
-  # metaclip2_all is the run this bundle ships, and it carries checkpoints/swa (2-4). It must stay
-  # first: metaclip2_FULL and the 20260609 run are not in the bundle at all, and falling through to
-  # mc2_l14_all_w5_e2_FULL — which holds only an interrupted checkpoints/last — silently deploys
-  # weights that are neither the SWA nor any epoch.
-  [metaclip2]="metaclip2_all metaclip2_FULL 20260609_070733_mc2_l14_distill_ddp_w5 mc2_l14_all_w5_e2_FULL"
+  [metaclip2]="metaclip2_all"
   [beit3_v2]="beit3_v2_FULL"
   [beit3_helip]="beit3_helip_FULL"
   [metaclip_v1]="metaclip_v1_FULL"
   [internvl_r32]="rerank_internvl_r32"
   [jina_m0]="rerank_jina_m0"
   [qwen3vl_2b]="rerank_qwen3vl_2b"
+  [siglip_maxsim]="siglip_maxsim_all"
+  [llm2clip_anchor5]="llm2clip_text_lora"
 )
 
 # Heldout runs used for selection. Rerankers have no separate heldout run — their step
@@ -114,6 +114,7 @@ declare -A HELDOUT_CAND=(
   [internvl_r32]="rerank_internvl_r32"
   [jina_m0]="rerank_jina_m0"
   [qwen3vl_2b]="rerank_qwen3vl_2b"
+  [siglip_maxsim]="siglip_maxsim_heldout"
 )
 
 # resolve_run <root> "<cand1> <cand2> …" -> first path that exists; otherwise the first

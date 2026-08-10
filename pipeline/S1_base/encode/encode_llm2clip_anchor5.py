@@ -47,12 +47,16 @@ a = ap.parse_args()
 if a.rep and a.limit:
     raise SystemExit("[encode_llm2clip_anchor5] --limit cannot be combined with --rep (prevents truncated artifacts).")
 
+def _enc(name):
+    """--rep takes the deployed adapter when there is one, else the shipped copy. Resolved per
+    adapter, so deploying the text adapter alone still merges the shipped v3 vision LoRA."""
+    rep = f"{_REPO}/assets/model_rep/encoder/{name}"
+    return rep if a.rep and os.path.exists(rep) else f"{_REPO}/assets/model/encoder/{name}"
+
+
 VIS = os.environ.get("LLM2CLIP_BASE", "microsoft/LLM2CLIP-Openai-L-14-336")
-ADAPTER = os.environ.get("ANCHOR5_ADAPTER", f"{_REPO}/assets/model/encoder/llm2clip_anchor5")
-# The vision tower comes from the v3 LoRA (q/k/v_proj · fc1 · fc2 · out_proj · visual_projection);
-# anchor5 targets `text_adapter.adaptor.*` only and leaves the tower untouched.
-V3_ADAPTER = os.environ.get("LLM2CLIP_V3_ADAPTER",
-                            f"{_REPO}/assets/model/encoder/llm2clip_lora_v3_best")
+ADAPTER = os.environ.get("ANCHOR5_ADAPTER", _enc("llm2clip_anchor5"))
+V3_ADAPTER = os.environ.get("LLM2CLIP_V3_ADAPTER", _enc("llm2clip_lora_v3_best"))
 QHIDDEN = os.environ.get("QUERY_HIDDEN", f"{ADAPTER}/query_hidden.pt")
 PAB_TEST = os.environ.get("PAB_TEST", f"{_REPO}/assets/data/raw/pab_test")
 GAL = os.environ.get("GALLERY", f"{PAB_TEST}/gallery")
@@ -65,6 +69,7 @@ for p, what in ((ADAPTER, "anchor5 adapter"), (QHIDDEN, "query hidden cache"),
                 (V3_ADAPTER, "v3 vision LoRA (merged under anchor5)")):
     if not os.path.exists(p):
         raise SystemExit(f"[encode_llm2clip_anchor5] {what} not found: {p}")
+    print(f"[weights] {what}: {os.path.relpath(p, _REPO)}", flush=True)
 
 
 def log(*x):

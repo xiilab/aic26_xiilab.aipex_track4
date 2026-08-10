@@ -15,12 +15,13 @@
 #   eva02_pre            eva02_pre_score.pt              track4_beit3   (zero-shot)
 #   metaclip_v1          metaclip_v1_score.pt            track4_beit3
 #   gme                  gme_feats.pt                    track4_gme     (zero-shot)
-#   siglip_maxsim        siglip_maxsim_score.pt          track4_llm2clip
+#   siglip_maxsim        siglip_maxsim_score.pt          track4_llm2clip + track4_beit3 (2 stages)
 #
 #   The six tail-NN encoders (used by S4b/S4c) are built separately with --tail.
 #
 # Envs are not interchangeable — the transformers pins differ (4.30.2 / 4.51.3 / 4.56.2 / 5.4.0).
-# encode_anchor_tcap · encode_eva02 · encode_metaclip have no --gpu flag and take the GPU
+# encode_anchor_tcap · encode_eva02 · encode_metaclip · encode_qwen3vl_embed ·
+#    encode_llm2clip_anchor5 · encode_gallery_emb have no --gpu flag and take the GPU
 #    from CUDA_VISIBLE_DEVICES.
 # --limit cannot be combined with --rep (smoke runs only).
 #
@@ -98,8 +99,11 @@ declare -A OUT_OF=(
 declare -A ENV_OF=(
   [anchor_tcap]=train  [anchor_filip]=train  [metaclip2]=train  [mc2h378_peft]=train
   [beit3_v2]=beit3     [beit3_helip]=beit3   [eva02_pre]=beit3  [metaclip_v1]=beit3
-  [gme]=gme            [siglip_maxsim]=llm2clip
+  [gme]=gme            [siglip_maxsim]=llm2clip+beit3   # two stages, two envs
 )
+env_label() {   # "a+b" -> "track4_a + track4_b"
+  local v="$1"
+  printf 'track4_%s' "${v%%+*}"; [ "$v" != "${v%%+*}" ] && printf ' + track4_%s' "${v#*+}"; :; }
 
 # ── Per-member encoding ────────────────────────────────────────────────────
 enc_anchor_tcap()  { need_py "$PY_TRAIN" train
@@ -120,18 +124,26 @@ enc_metaclip_v1()  { need_py "$PY_BEIT3" beit3
   run env CUDA_VISIBLE_DEVICES="$GPU" "$PY_BEIT3" $E/encode_metaclip.py "${RF[@]+"${RF[@]}"}"; }
 enc_gme()          { need_py "$PY_GME" gme         # zero-shot
   run "$PY_GME" $E/encode_gme.py --gpu "$GPU" "${RF[@]+"${RF[@]}"}"; }
-enc_siglip_maxsim(){ need_py "$PY_LLM2CLIP" llm2clip
-  run "$PY_LLM2CLIP" $E/encode_siglip_maxsim.py --gpu "$GPU" "${RF[@]+"${RF[@]}"}" "${LF[@]+"${LF[@]}"}"; }
+# siglip_maxsim is the one member built in two passes, and they need different envs:
+#   base   (llm2clip) SigLIP2-L DoRA pooled score -> members/siglip_maxsim_base.pt
+#   maxsim (beit3)    BEiT3-helip token MaxSim blended over the base's own top-K
+#                     -> members/siglip_maxsim_score.pt   <- the artifact build_base reads
+# --stage is required by the encoder, so calling it once with neither stage aborts the member.
+# Weights follow the usual split, no override: REP=0 reads assets/model, REP=1 assets/model_rep
+# (the SWA that 03 deploys).
+enc_siglip_maxsim(){ need_py "$PY_LLM2CLIP" llm2clip; need_py "$PY_BEIT3" beit3
+  run "$PY_LLM2CLIP" $E/encode_siglip_maxsim.py --stage base   --gpu "$GPU" "${RF[@]+"${RF[@]}"}" "${LF[@]+"${LF[@]}"}"
+  run "$PY_BEIT3"    $E/encode_siglip_maxsim.py --stage maxsim --gpu "$GPU" "${RF[@]+"${RF[@]}"}" "${LF[@]+"${LF[@]}"}"; }
 
 # ── Listing ────────────────────────────────────────────────────────────────
 if [ "$LIST" = 1 ]; then
   say "[04] 10 S1 members · REP=$REP -> $MEM"
-  printf '  %-15s %-30s %-9s %s\n' "member" "artifact" "env" "state"
-  printf '  %-15s %-30s %-9s %s\n' "--------------" "-----------------------------" "--------" "-----"
+  printf '  %-15s %-30s %-14s %s\n' "member" "artifact" "env" "state"
+  printf '  %-15s %-30s %-14s %s\n' "--------------" "-----------------------------" "-------------" "-----"
   for m in "${MODELS[@]}"; do
     f="$MEM/${OUT_OF[$m]}"
     if [ -e "$f" ]; then s="✓ $(du -h "$f" 2>/dev/null | cut -f1)"; else s="·"; fi
-    printf '  %-15s %-30s %-9s %s\n' "$m" "${OUT_OF[$m]}" "${ENV_OF[$m]}" "$s"
+    printf '  %-15s %-30s %-14s %s\n' "$m" "${OUT_OF[$m]}" "${ENV_OF[$m]}" "$s"
   done
   echo; echo "  print the commands only: DRY=1 bash ops/04_encode.sh --all"
   exit 0
@@ -144,10 +156,11 @@ if [ "$TAIL" = 1 ]; then
   need_py "$PY_GME" gme;     need_py "$PY_LLM2CLIP" llm2clip
   run "$PY_GME"      $E/encode_gme.py             --gpu "$GPU" "${RF[@]+"${RF[@]}"}"
   run "$PY_TRAIN"    $E/encode_metaclip2.py             --gpu "$GPU" "${RF[@]+"${RF[@]}"}"
-  run "$PY_TRAIN"    $E/encode_qwen3vl_embed.py   --gpu "$GPU" "${RF[@]+"${RF[@]}"}"
-  run "$PY_LLM2CLIP" $E/encode_llm2clip_anchor5.py --gpu "$GPU" "${RF[@]+"${RF[@]}"}"
-  run "$PY_BEIT3"    $E/encode_gallery_emb.py --enc dfn      --gpu "$GPU" "${RF[@]+"${RF[@]}"}"
-  run "$PY_BEIT3"    $E/encode_gallery_emb.py --enc convnext --gpu "$GPU" "${RF[@]+"${RF[@]}"}"
+  # These four take no --gpu; they read CUDA_VISIBLE_DEVICES, like encode_eva02/encode_metaclip above.
+  run env CUDA_VISIBLE_DEVICES="$GPU" "$PY_TRAIN"    $E/encode_qwen3vl_embed.py    "${RF[@]+"${RF[@]}"}"
+  run env CUDA_VISIBLE_DEVICES="$GPU" "$PY_LLM2CLIP" $E/encode_llm2clip_anchor5.py "${RF[@]+"${RF[@]}"}"
+  run env CUDA_VISIBLE_DEVICES="$GPU" "$PY_BEIT3"    $E/encode_gallery_emb.py --enc dfn      "${RF[@]+"${RF[@]}"}"
+  run env CUDA_VISIBLE_DEVICES="$GPU" "$PY_BEIT3"    $E/encode_gallery_emb.py --enc convnext "${RF[@]+"${RF[@]}"}"
   echo
   warn "in adopted mode (--adopted) gme and metaclip2 write no s4_nn copy — copy it across yourself."
   ok "tail-NN done"
@@ -197,7 +210,7 @@ for m in "${TARGETS[@]}"; do
     warn "$m does not support --limit -> skipped in a smoke run (it would encode everything)"
     continue
   fi
-  echo; say "[04] $m  (env=track4_${ENV_OF[$m]} · GPU=$GPU$([ "$SMOKE" = 1 ] && printf " · smoke"))"
+  echo; say "[04] $m  (env=$(env_label "${ENV_OF[$m]}") · GPU=$GPU$([ "$SMOKE" = 1 ] && printf " · smoke"))"
   # One failing member does not stop the rest. Under set -e the whole run used to die, so the
   # later members were never attempted (a missing siglip_maxsim blocked both beit3 members).
   if ! "enc_$m"; then
