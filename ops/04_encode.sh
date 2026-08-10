@@ -162,7 +162,17 @@ if [ "$TAIL" = 1 ]; then
   run env CUDA_VISIBLE_DEVICES="$GPU" "$PY_BEIT3"    $E/encode_gallery_emb.py --enc dfn      "${RF[@]+"${RF[@]}"}"
   run env CUDA_VISIBLE_DEVICES="$GPU" "$PY_BEIT3"    $E/encode_gallery_emb.py --enc convnext "${RF[@]+"${RF[@]}"}"
   echo
-  warn "in adopted mode (--adopted) gme and metaclip2 write no s4_nn copy — copy it across yourself."
+  # gme and metaclip2 write their own s4_nn copy only under --rep (encode_gme.py · encode_metaclip2.py
+  # gate it on `a.rep`), but run_reproduce.sh wants all six s4_nn files whichever mode built the cache.
+  if [ "$REP" = 0 ] && [ "$SMOKE" = 0 ]; then
+    for f in gme_feats.pt metaclip2_feats.pt; do
+      if [ -e "$CACHE/s1_base/members/$f" ]; then
+        run cp -a "$CACHE/s1_base/members/$f" "$CACHE/s4_nn/$f"
+      else
+        warn "$f missing from $CACHE/s1_base/members — run bash ops/04_encode.sh --all first"
+      fi
+    done
+  fi
   ok "tail-NN done"
   exit 0
 fi
