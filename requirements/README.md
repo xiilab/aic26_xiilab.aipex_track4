@@ -53,11 +53,15 @@ Moving everything to "just the latest" breaks in specific places, so the familie
 - **`beit3.txt` = transformers 4.30.2 + torchscale** — the vendored BEiT3 tree assumes this
   combination. The encoders that need `open_clip` (metaclip_v1 · eva02 · dfn/convnext) use this env
   as well.
-- **`ovis` (score_union_ovis) = transformers 4.x** — Ovis2.5's remote code reads
+- **`ovis` (score_union_ovis) = `gme.txt`, transformers 4.51.3** — Ovis2.5's remote code reads
   `self.llm.is_parallelizable`, an attribute removed in 5.x. Its auto_map also ships separate config
   and modeling copies, which makes `AutoModel.from_config(vit_config)` fail as Unrecognized, so the
   script re-registers the config instance's actual class to bridge them (shim at the top of
-  `score_union_ovis.py`). Verified working on 4.57.1.
+  `score_union_ovis.py`). Any 4.x loads, but only **4.51.3** reproduces the distributed
+  `ovis_union_cache.pt` bit-exactly (max|Δ| = 0). On 4.56.2 (`llm2clip.txt`) the scores still
+  correlate at 0.9995 but only 44.6% of pairs are identical (max|Δ| 0.75 · top-1 97.98%), which is
+  enough to move the final answer. The scorer is deterministic within one env — two runs agree
+  exactly — so the version is the whole difference. `ops/05_rerank.sh` sets `PY_OVIS=$PY_GME`.
 - **`vllm.txt` = torch 2.11+cu130** — the MoE in `internvl_r32` (InternVL3.5-30B-A3B) requires
   `torch._grouped_mm` (Hopper/sm_90+). On torch 2.8 every forward raises and the scorer ends
   silently at 0 steps.

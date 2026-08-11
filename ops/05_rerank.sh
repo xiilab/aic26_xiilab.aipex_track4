@@ -3,8 +3,8 @@
 # 05_rerank.sh — the seven S2 rerankers re-score the union pool -> cache_rep/s2_rerank/
 #                plus the three fuse_cache dumps S3 reads
 #
-# They run in **track4_vllm**, except ovis, which needs transformers 4.x and runs in
-# **track4_llm2clip** (PY_OVIS). This is the most GPU-expensive stage of the pipeline, so
+# They run in **track4_vllm**, except ovis, which needs transformers 4.51.3 and runs in
+# **track4_gme** (PY_OVIS). This is the most GPU-expensive stage of the pipeline, so
 # splitting it per member (--slice) or running it in the background is usually better.
 #
 #   member        script                        model                             note
@@ -13,7 +13,7 @@
 #   8b            score_union_qwen_4b.py        Qwen3-VL-Reranker-8B              reuses recs
 #   qwen3vl_2b    score_union_qwen_4b.py        Qwen3-VL 2B + DoRA                reuses recs
 #   pixtral       score_union_pixtral_4b.py     Pixtral-12B-2409                  zero-shot
-#   ovis          score_union_ovis.py           Ovis2.5-9B                        zero-shot · tf 4.x
+#   ovis          score_union_ovis.py           Ovis2.5-9B                        zero-shot · tf 4.51.3
 #   jina_m0       score_union_jina.py           jina-reranker-m0 + adapter
 #
 #   The three fuse_cache dumps (read by IV_CACHE in S3 fuse.py — fixed top-20 column format):
@@ -79,7 +79,11 @@ MR="assets/model"; [ "$REP" = 1 ] && MR="assets/model_rep"
 MEMBERS=(internvl_r32 llama 8b qwen3vl_2b pixtral ovis jina_m0)
 
 
-PY_OVIS="${PY_OVIS:-$PY_LLM2CLIP}"
+# ovis runs in track4_gme (transformers 4.51.3), not track4_llm2clip (4.56.2). Measured against the
+# distributed cache: 4.51.3 reproduces it bit-exactly (max|Δ| = 0), while 4.56.2 matches only 44.6%
+# of pairs (max|Δ| 0.75 · top-1 97.98%). The scorer itself is deterministic — two runs in the same
+# env are identical — so the transformers version is the whole difference.
+PY_OVIS="${PY_OVIS:-$PY_GME}"
 
 # OUT_DIR=<repo-relative dir> scores the full pool with the adopted weights but writes somewhere
 # isolated, leaving both assets/cache and assets/cache_rep untouched. RECS_DIR follows it, so
@@ -161,8 +165,8 @@ rr_pixtral() {
   run "${SENV[@]}" CUDA_VISIBLE_DEVICES="$GPU" "$PY_VLLM" $S2/score_union_pixtral_4b.py \
     --name pixtral "${RF[@]+"${RF[@]}"}" "${LIM[@]+"${LIM[@]}"}"
 }
-rr_ovis() {   # track4_llm2clip (transformers 4.x), not track4_vllm — see PY_OVIS above
-  need_py "$PY_OVIS" llm2clip
+rr_ovis() {   # track4_gme (transformers 4.51.3), not track4_vllm — see PY_OVIS above
+  need_py "$PY_OVIS" gme
   run "${SENV[@]}" CUDA_VISIBLE_DEVICES="$GPU" "$PY_OVIS" $S2/score_union_ovis.py \
     --model "$VLM/Ovis2.5-9B" --name ovis "${RF[@]+"${RF[@]}"}" "${LIM[@]+"${LIM[@]}"}"
 }
