@@ -78,17 +78,22 @@ MR="assets/model"; [ "$REP" = 1 ] && MR="assets/model_rep"
 
 MEMBERS=(internvl_r32 llama 8b qwen3vl_2b pixtral ovis jina_m0)
 
+
 PY_OVIS="${PY_OVIS:-$PY_LLM2CLIP}"
 
-# Smoke never writes a canonical cache: the downloaded *_union_cache.pt cannot be regenerated
-# cheaply. --rep would force WORKDIR to cache_rep, so REP stays 0 and WORKDIR is redirected here.
-if [ "$SMOKE" = 1 ]; then
+# OUT_DIR=<repo-relative dir> scores the full pool with the adopted weights but writes somewhere
+# isolated, leaving both assets/cache and assets/cache_rep untouched. RECS_DIR follows it, so
+# 8b/qwen3vl_2b re-score every pair instead of reusing the adopted recs dump.
+if [ "$SMOKE" = 1 ] || [ -n "${OUT_DIR:-}" ]; then
   REP=0; RF=()
   CACHE="assets/cache"
   MR="assets/model"
-  RR="ops/smoke/s2_rerank"
+  RR="${OUT_DIR:-ops/smoke/s2_rerank}"
+  [ "$SMOKE" = 1 ] || RECS_DIR="${RECS_DIR:-$REPO/$RR}"
   mkdir -p "$REPO/$RR"
-  [ -e "$REPO/$RR/union_pool.pt" ] || ln -sfn "$REPO/assets/cache/s1_base/union_pool.pt" "$REPO/$RR/union_pool.pt"
+  # A copy, not a symlink (1 MB): the adopted cache gets rebuilt by other runs, and a dangling link
+  # would kill an isolated job that has no reason to care.
+  [ -e "$REPO/$RR/union_pool.pt" ] || cp "$REPO/assets/cache/s1_base/union_pool.pt" "$REPO/$RR/union_pool.pt"
   POOLF="union_pool.pt"
 else
   POOLF="../s1_base/union_pool.pt"
@@ -142,6 +147,9 @@ rr_8b() {      # reuses the recs dump when present -> only new (q,c) pairs reach
     --qwen 8b --name 8b "${RU[@]+"${RU[@]}"}" \
     "${RF[@]+"${RF[@]}"}" "${QS[@]+"${QS[@]}"}" "${QSMOKE[@]+"${QSMOKE[@]}"}"
 }
+# Do not reduce this member's pool to the base top-5 that build_recs consumes: S4a reads the union
+# cache directly (tail_refinement.py `cache`/`sig()`) and only falls back to the recs dump when a
+# pair is missing, so truncating it costs mAP@10 -0.032 / R@1 -1 / R@10 -1 (measured).
 rr_qwen3vl_2b() {
   want_recs recs_2b_dora_k5_p3.pt
   run "${QENV[@]}" CUDA_VISIBLE_DEVICES="$GPU" "$PY_VLLM" $S2/score_union_qwen_4b.py \
@@ -230,7 +238,7 @@ if [ "$FUSE" = 1 ]; then
     --model "$VLM/InternVL3_5-30B-A3B-HF" --adapter "$MR/reranker/internvl_r32" \
     --name internvl_r32 "${RF[@]+"${RF[@]}"}" "${MQ[@]+"${MQ[@]}"}"
   run "${FENV[@]}" CUDA_VISIBLE_DEVICES="$GPU" "$PY_VLLM" $S2/dump_fuse_cache.py \
-    --model "$VLM/Pixtral-12B-2409" --name pixtral "${RF[@]+"${RF[@]}"}" "${MQ[@]+"${MQ[@]}"}"
+    --model "$VLM/Pixtral-12B-2409" --name pixtral --engine vllm "${RF[@]+"${RF[@]}"}" "${MQ[@]+"${MQ[@]}"}"
   run "${FENV[@]}" CUDA_VISIBLE_DEVICES="$GPU" "$PY_VLLM" $S2/dump_fuse_cache.py \
     --model "$VLM/Llama-3.2-11B-Vision-Instruct" --name llama32v "${RF[@]+"${RF[@]}"}" "${MQ[@]+"${MQ[@]}"}"
   echo
@@ -247,13 +255,15 @@ fi
 [ "$ALL" = 1 ] && TARGETS=("${MEMBERS[@]}")
 [ "${#TARGETS[@]}" -gt 0 ] || die "name a target. List them with: bash ops/05_rerank.sh --list"
 [ "$SMOKE" = 1 ] && warn "smoke mode — a few queries only · output $RR (isolated). Not canonical."
-if [ "$SMOKE" = 0 ] && [ "$REP" = 0 ]; then
+if [ "$SMOKE" = 0 ] && [ "$REP" = 0 ] && [ -z "${OUT_DIR:-}" ]; then
   warn "adopted mode: assets/cache/s2_rerank/*_union_cache.pt is git-tracked content and gets overwritten."
 fi
 [ -n "$SLICE" ] && [ "${#TARGETS[@]}" -gt 1 ] && die "--slice applies to a single member only"
 
 need_py "$PY_VLLM" vllm
-need_path "$CACHE/s1_base/union_pool.pt" "bash ops/04_encode.sh --build"
+# Check the pool this run actually reads: an OUT_DIR/smoke run owns a copy under $RR, so it must not
+# fail because the adopted cache is mid-rebuild by something else.
+need_path "$RR/$POOLF" "bash ops/04_encode.sh --build"
 if [ "$REP" = 1 ]; then
   need_path "$MR/reranker" "bash ops/03_deploy.sh --adopted"
 fi

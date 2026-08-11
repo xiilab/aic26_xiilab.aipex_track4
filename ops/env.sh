@@ -17,6 +17,21 @@ cd "$REPO"                                  # every script assumes the repositor
 GPU="${GPU:-6}"
 GPU2="${GPU2:-7}"
 
+# ── cuBLAS workspace ───────────────────────────────────────────────────────
+# The adopted caches were produced with this unset. Some container images export
+# CUBLAS_WORKSPACE_CONFIG=:4096:8 (it is what torch.use_deterministic_algorithms asks for), and the
+# bounded workspace makes cuBLAS pick different GEMM kernels. The bf16 accumulation order changes,
+# scores move by a few ULP, S3's z() rescaling amplifies that inside the 20-candidate pool, and
+# near-tie queries flip — measured as mAP@10 99.3357 -> 99.1431 over a full reranker regeneration.
+# Unset, re-scoring reproduces the adopted cache **bit for bit** (internvl_r32, 353 pairs: 100.0%
+# identical, max|d|=0). Keep it unset so the result does not depend on which image the job lands in.
+#   KEEP_CUBLAS_WORKSPACE=1 leaves the inherited value alone.
+if [ "${KEEP_CUBLAS_WORKSPACE:-0}" != 1 ] && [ -n "${CUBLAS_WORKSPACE_CONFIG:-}" ]; then
+  printf '  \033[33m⚠\033[0m unsetting CUBLAS_WORKSPACE_CONFIG=%s (changes cuBLAS GEMM selection)\n' \
+    "$CUBLAS_WORKSPACE_CONFIG"
+  unset CUBLAS_WORKSPACE_CONFIG
+fi
+
 # ── Source tree (read-only) ────────────────────────────────────────────────
 # Where 01 stages data, weights and runs from — a directory laid out like this repository, so
 # $SRC_REPO/assets/... resolves. Never written to. There is deliberately no default: it is
