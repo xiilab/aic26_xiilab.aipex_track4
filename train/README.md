@@ -45,5 +45,66 @@ md5 or gates do not match.
 (`build_manifest.py` / `build_negcache.py` regenerate them). Step selection:
 `reranker/eval/eval_step.py` (accuracy gate + calibration).
 
-Run every trainer from the repository root, in the conda env listed in
-[`requirements/README.md`](../requirements/README.md).
+## Environment
+
+Run every trainer from the repository root. **Training does not all happen in one env** — it uses
+three of the five, and the mapping is held in code by
+[`ops/06_train.sh`](../ops/06_train.sh), which launches `train.py` under the right interpreter:
+
+```bash
+bash ops/06_train.sh --list                  # targets and the env each one needs
+GPU=3 bash ops/06_train.sh internvl_r32 -- --lora-r 32 --lr 1e-4
+DRY=1 bash ops/06_train.sh --all             # print the plan; needs no env or data
+```
+
+| target | env | wrong env gives |
+|---|---|---|
+| `anchor_{tcap,filip}_*` · `mc2h378_peft_*` · `siglip_maxsim_*` · `metaclip2` | `track4_train` | — |
+| `qwen3vl_2b` | `track4_train` | 4.30.2: `ImportError: cannot import name 'Cache'` |
+| `jina_m0` | `track4_train` | 5.9.0: fails to load · other 5.x: **silently random-initialised** |
+| `metaclip_v1` | `track4_beit3` | `ModuleNotFoundError: open_clip` |
+| `beit3` | `track4_beit3` | vendored `run_beit3_finetuning` needs `torchscale` |
+| **`internvl_r32`** | **`track4_vllm`** | torch 2.8: **0 optimiser steps, checkpoint still written** |
+
+### Two of those failures are silent
+
+**`internvl_r32` on torch 2.8 trains on nothing.** Its MoE calls `torch._grouped_mm`, which torch
+2.8 accepts on compute capability **9.0 only** — Hopper — so on a B300 (sm_103) every forward
+raises `RuntimeError`. `train.py` catches it per step and continues, so the run finishes early,
+prints no error, and writes a checkpoint. Always smoke it first and check the step count actually
+moves:
+
+```bash
+GPU=3 bash ops/06_train.sh internvl_r32 -- --max-steps 20 --heldout 500
+```
+
+**`jina_m0` can train against noise.** `train.py` loads `JinaVLForRanking` with a bare
+`AutoModel.from_pretrained(..., trust_remote_code=True)` — no `key_mapping`, no `missing_keys`
+check, unlike `pipeline/S2_rerank/score_union_jina.py`. transformers 5.x registers the Qwen2-VL key
+rename under the *class* name, and this subclass does not match it, so a mismatched version
+initialises both towers randomly without raising. Measured `missing_keys`: 4.51.3 → 0,
+**5.4.0 → 0**, 4.30.2 → `ImportError`, 5.9.0 → load fails. `track4_train` (5.4.0) is therefore safe
+as shipped; moving jina training to a newer transformers needs the `KEY_MAP` guard copied over
+first.
+
+### GPU selection: `--gpu` or `CUDA_VISIBLE_DEVICES`, never both
+
+Twelve trainers take `--gpu` and index the **physical** device (`cuda:{physical_gpu}`);
+`metaclip2` and `metaclip_v1` take none and read `CUDA_VISIBLE_DEVICES`. Setting both breaks the
+first group — the process then sees one device numbered 0 while the script asks for `cuda:$GPU`.
+Exporting alone is not enough either: `beit3`, `internvl_r32`, `jina_m0` and `qwen3vl_2b` assign
+`os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu` themselves before importing torch, so their own
+default (`0`, or `6` for beit3) wins and the job quietly lands elsewhere. `06_train.sh` picks the
+right one per target; pass `--gpu` after `--` to override `GPU=`.
+
+### What re-training does and does not reproduce
+
+It reproduces the **environment**, not the weights. Seeds are uneven — the encoder trainers and
+`jina_m0`/`qwen3vl_2b` set `manual_seed` + `cudnn.deterministic`, while `beit3`, `metaclip_v1` and
+`internvl_r32` set no seed at all, and no trainer calls `torch.use_deterministic_algorithms`. A
+re-trained checkpoint will not match the adopted one bit for bit.
+
+None of this is needed to reproduce the submission: the adopted adapters ship under
+`assets/model/{encoder,reranker}/` and `ops/04`/`05` read them directly. Version-pin rationale is
+in [`requirements/README.md`](../requirements/README.md); the runbook is in
+[`ops/README.md`](../ops/README.md) §8.

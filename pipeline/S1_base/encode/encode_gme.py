@@ -47,7 +47,7 @@ GAL = f"{TEST}/gallery"; QJSON = f"{TEST}/query_text.json"
 
 from transformers import AutoModel
 print(f"[load] base={BASE}", flush=True)
-model = AutoModel.from_pretrained(BASE, torch_dtype=torch.bfloat16, trust_remote_code=True,
+model = AutoModel.from_pretrained(BASE, torch_dtype=torch.float16, trust_remote_code=True,
                                   attn_implementation="sdpa").to("cuda:0").eval()
 if ADAPTER:
     from peft import PeftModel

@@ -11,7 +11,11 @@ ops/02_select.sh        pick an epoch/step on the held-out bench
 ops/03_deploy.sh        selected checkpoint -> assets/model_rep
 ops/04_encode.sh        encode the 10 S1 members -> cache -> base·union
 ops/05_rerank.sh        re-score with the 7 S2 rerankers + 3 fuse_cache dumps
+ops/06_train.sh         (optional) re-train a member in the env its dependencies pin
 ```
+
+`06` is not part of the reproduction path — the adopted weights already ship. It exists so that
+re-training a member uses the same pinned env the adopted weights came from; see §8.
 
 Full order (S3 and S4 are driven together by `run_reproduce.sh`):
 
@@ -308,6 +312,17 @@ bash ops/05_rerank.sh --fuse    # needs the recs dump
 `recs_*.pt` is assembled from the base score and the reranker union scores, so `--recs` needs no
 GPU. Consumers hard-code the file names (`recs_8b_p3_k20.pt`, `recs_2b_dora_k5_p3.pt`).
 
+**A rebuilt recs dump has different candidates than the distributed one — expected, and harmless.**
+`cand` is the base top-K, and `build_recs.py` reads the base from `BASE_PT`, defaulting to
+`assets/cache/s1_base/base_score.pt`. The distributed `recs_*.pt` was not built from that file: its
+top-20 columns match `base_score.pt` for only 4.8% of queries as a set (0% in order), because it
+predates it and came from an earlier base in the greedy sweep. So `05 --recs` on a from-scratch run
+produces a dump whose candidate lists differ from the shipped artifact — do not read that as a
+failed reproduction. Measured on the full test set, replacing the shipped dump with a rebuilt one
+leaves the final answer **byte-identical**, in both the replay and the full-recompute
+configurations: `cand`/`sim` feed S4a's fallback path only, and every candidate it reaches is
+already covered by the union caches. Compare metrics and answer lines, never the recs md5.
+
 ### fuse_cache is a separate format
 
 `score_union_*.py` re-scores the whole union pool, whereas `dump_fuse_cache.py` produces the
@@ -342,6 +357,70 @@ Do not call `run_submission.py` directly instead of `run_reproduce.sh`: without
 produces a different answer.
 
 Reference md5: adopted weights through every stage = `f6290321`, stopping at S3 = `98471257`.
+
+---
+
+## 8. Training (`06_train.sh`, optional)
+
+**Nothing above needs this.** Every adopted adapter ships under `assets/model/{encoder,reranker}/`,
+and `04`/`05` read them directly — reproduction starts at encoding. `06` is for re-training a
+member, and its only job is to launch `train.py` under the env that member's dependencies pin,
+the same way `05` routes `ovis` to `track4_gme`.
+
+```bash
+bash ops/06_train.sh --list                  # targets and the env each one needs
+bash ops/06_train.sh anchor_tcap_all
+GPU=3 bash ops/06_train.sh internvl_r32 -- --lora-r 32 --lr 1e-4 --grad-accum 8
+DRY=1 bash ops/06_train.sh --all             # print the plan; needs no env or data
+```
+
+Arguments after `--` are appended verbatim to `train.py`, and apply to a single target.
+
+### `GPU=` works, but the two mechanisms must not be mixed
+
+Twelve of the fourteen scripts take `--gpu` and index the **physical** device
+(`cuda:{physical_gpu}`), so `06` passes `--gpu $GPU` to those and exports nothing. `metaclip2` and
+`metaclip_v1` take no `--gpu` and read `CUDA_VISIBLE_DEVICES`, so those get the export instead.
+
+Doing both would break them: with `CUDA_VISIBLE_DEVICES=3` the process sees a single device
+numbered 0, while the script asks for `cuda:3`. And exporting alone is not enough either —
+`beit3`, `internvl_r32`, `jina_m0` and `qwen3vl_2b` assign
+`os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu` themselves before importing torch, so their own
+default (`0`, or `6` for beit3) silently wins and the job lands on a device you did not pick. Pass
+`--gpu` explicitly after `--` to override `GPU=`.
+
+### The env is not interchangeable, and two failures are silent
+
+| target | env | consequence of the wrong one |
+|---|---|---|
+| `anchor_{tcap,filip}_*` · `mc2h378_peft_*` · `siglip_maxsim_*` · `metaclip2` | `track4_train` | — |
+| `qwen3vl_2b` | `track4_train` | 4.30.2: `ImportError: cannot import name 'Cache'` (loud) |
+| `jina_m0` | `track4_train` | 5.x **randomly initialises both towers with no error** |
+| `metaclip_v1` | `track4_beit3` | `ModuleNotFoundError: open_clip` (loud) |
+| `beit3` | `track4_beit3` | vendored `run_beit3_finetuning` needs `torchscale` (loud) |
+| **`internvl_r32`** | **`track4_vllm`** | torch 2.8: **0 optimiser steps, checkpoint still written** |
+
+`internvl_r32` is the sharp edge. Its MoE calls `torch._grouped_mm`, which on torch 2.8 accepts
+compute capability **9.0 only** — Hopper — so on this box (B300, sm_103) every forward raises
+`RuntimeError`. `train.py` catches it per step and continues, so the run finishes quickly, reports
+no error, and writes a checkpoint trained on nothing. torch 2.11 (`track4_vllm`) is the fix, and
+the same call there returns normally.
+
+`jina_m0` is the quiet one: `train.py` loads `JinaVLForRanking` with a bare
+`AutoModel.from_pretrained(trust_remote_code=True)`, without the `key_mapping`/`missing_keys` guard
+that `score_union_jina.py` carries. Measured, the checkpoint loads with `missing_keys=0` on both
+4.51.3 and **5.4.0**, so `track4_train` is safe as-is; 5.9.0 fails to load at all. Rationale and the
+full measurement table are in [`../requirements/README.md`](../requirements/README.md).
+
+`CUBLAS_WORKSPACE_CONFIG` follows `env.sh` and is unset by default, matching the container the
+adopted weights were trained in, so the GEMM kernels do not change between training and
+encoding/scoring. `KEEP_CUBLAS_WORKSPACE=1` leaves an inherited value alone.
+
+> Seeds are a separate matter and `06` does not touch them. `manual_seed` +
+> `cudnn.deterministic` are set by the encoder trainers and by `jina_m0`/`qwen3vl_2b`;
+> `beit3`, `metaclip_v1` and `internvl_r32` set no seed, and no trainer calls
+> `torch.use_deterministic_algorithms`. Re-training therefore reproduces the *environment*, not the
+> weights bit-for-bit.
 
 ---
 

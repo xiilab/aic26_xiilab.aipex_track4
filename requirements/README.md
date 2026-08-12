@@ -34,7 +34,7 @@ present in the pinned versions — so `--no-deps` is safe here.
 
 | env | requirements | index | what it runs |
 |---|---|---|---|
-| `track4_train` | `train.txt` (transformers 5.4.0 · peft 0.18.1) | cu129 | encoder/reranker **training** · `encode_metaclip2` · `encode_mc2h378` · `encode_anchor_{tcap,filip}` · `encode_qwen3vl_embed` |
+| `track4_train` | `train.txt` (transformers 5.4.0 · peft 0.18.1) | cu129 | most **training** (see [below](#training-uses-three-of-these-envs-not-one)) · `encode_metaclip2` · `encode_mc2h378` · `encode_anchor_{tcap,filip}` · `encode_qwen3vl_embed` |
 | `track4_beit3` | `beit3.txt` (open_clip 3.3.0 · torchscale · transformers 4.30.2) | cu129 | `encode_beit3` · `encode_metaclip` · `encode_eva02` · `encode_gallery_emb` (dfn·convnext) · beit3 training/eval |
 | `track4_gme` | `gme.txt` (**transformers 4.51.3**) | cu129 | `encode_gme` |
 | `track4_llm2clip` | `llm2clip.txt` (**transformers 4.x**) | cu129 | `encode_llm2clip_anchor5` · `encode_siglip_maxsim` |
@@ -63,8 +63,48 @@ Moving everything to "just the latest" breaks in specific places, so the familie
   enough to move the final answer. The scorer is deterministic within one env — two runs agree
   exactly — so the version is the whole difference. `ops/05_rerank.sh` sets `PY_OVIS=$PY_GME`.
 - **`vllm.txt` = torch 2.11+cu130** — the MoE in `internvl_r32` (InternVL3.5-30B-A3B) requires
-  `torch._grouped_mm` (Hopper/sm_90+). On torch 2.8 every forward raises and the scorer ends
-  silently at 0 steps.
+  `torch._grouped_mm`, and torch 2.8 accepts **compute capability 9.0 and nothing else**. That is
+  Hopper only, so it also refuses Blackwell: on this box (B300, sm_103) a minimal bf16 call raises
+  `RuntimeError: torch._grouped_mm is only supported on CUDA devices with compute capability = 9.0`,
+  while the same call on torch 2.11 returns normally. Every forward raises, and both the scorer and
+  `train/reranker/internvl_r32/train.py` swallow it — the run ends at 0 steps with no error.
+
+## Training uses three of these envs, not one
+
+Training is **not needed to reproduce the submission** — every adopted adapter ships under
+`assets/model/{encoder,reranker}/`, and `ops/04`/`05` read those directly. It matters when a member
+is re-trained, and then the env is not a preference: the same pins that make scoring reproducible
+decide whether training runs at all. Two of the three failure modes are silent.
+
+`ops/06_train.sh` holds this mapping in code, so `bash ops/06_train.sh <target>` picks the
+interpreter rather than leaving it to whichever env is active.
+
+| target | env | why |
+|---|---|---|
+| `anchor_{tcap,filip}_{all,heldout}` · `mc2h378_peft_{all,heldout}` · `siglip_maxsim_{all,heldout}` · `metaclip2` | `track4_train` | peft adapters, no `open_clip` |
+| `jina_m0` | `track4_train` | see below |
+| `qwen3vl_2b` | `track4_train` | Qwen3-VL needs 5.x; 4.30.2 raises `ImportError: cannot import name 'Cache'` |
+| `metaclip_v1` | `track4_beit3` | needs `open_clip` 3.3.0, absent from `train` and `vllm` |
+| `beit3` | `track4_beit3` | imports the vendored `run_beit3_finetuning` → `torchscale` |
+| **`internvl_r32`** | **`track4_vllm`** | torch 2.11 for `_grouped_mm` (above). **`track4_train` gives 0 steps, silently** |
+
+**`jina_m0` is the one to watch.** `train.py` loads `JinaVLForRanking` with a plain
+`AutoModel.from_pretrained(..., trust_remote_code=True)` — no `key_mapping`, no `missing_keys`
+check. transformers 5.x registers the Qwen2-VL key rename under the *class* name, which this
+subclass does not match, so a mismatched version initialises the towers randomly and trains happily
+against noise. That is the bug `score_union_jina.py`'s `KEY_MAP` guard exists for. Measured
+`missing_keys` when loading the checkpoint:
+
+| transformers | result |
+|---|---|
+| 4.51.3 (`gme`) | 0 — loads |
+| **5.4.0 (`train`)** | **0 — loads; this is why `06_train.sh` sends jina here** |
+| 4.30.2 (`beit3`) | `ImportError: cannot import name 'Cache'` |
+| 5.9.0 (`vllm`) | load fails outright (`TypeError`) |
+
+So the pin protects training as much as scoring, but only `track4_train` happens to be safe
+*without* a guard — moving `jina_m0` training to a newer transformers needs the same `KEY_MAP`
+treatment first.
 
 ## Model weights
 

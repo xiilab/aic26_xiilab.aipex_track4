@@ -12,6 +12,12 @@ The output file names are hard-coded by the consumers and kept as is:
   --name 8b          -> recs_8b_p3_k20.pt      (K=20)
   --name qwen3vl_2b  -> recs_2b_dora_k5_p3.pt  (K=5)
 
+`cand` is the top-K of BASE_PT (default assets/cache/s1_base/base_score.pt). The distributed
+recs_*.pt came from an earlier base in the greedy sweep, so a rebuild yields different candidate
+lists — its top-20 overlaps the shipped dump for only 4.8% of queries as a set. That is expected:
+the final answer is byte-identical either way (measured on the full test set), because cand/sim
+feed S4a's fallback only for pairs the union caches already cover. Compare metrics, not the md5.
+
 Usage:
   python build_recs.py --name 8b --rep
   python build_recs.py --name qwen3vl_2b --rep
