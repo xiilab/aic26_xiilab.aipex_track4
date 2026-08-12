@@ -187,20 +187,8 @@ bash ops/03_deploy.sh anchor_tcap --pick 8-10
 bash ops/03_deploy.sh --verify             # md5 the deployment against the source tree
 ```
 
-Adopted values:
-
-| model | adopted | deployment |
-|---|---|---|
-| anchor_tcap | SWA 8–10 | `build_swa.py <run> 8 10` -> `deploy.py <run>` |
-| anchor_filip | SWA 8–10 | same |
-| mc2h378_peft | SWA 2–4 | same |
-| metaclip2 | `ep02` | `deploy.py <run> --epoch 2` |
-| beit3_v2 | `checkpoint-3` | `deploy.py <run> --recipe v2 --epoch 3` |
-| beit3_helip | `checkpoint-2` | `deploy.py <run> --recipe helip --epoch 2` |
-| metaclip_v1 | `epoch_4` | `deploy.py <ckpt_dir> --epoch 4` |
-| internvl_r32 | `step2500` | `deploy.py <run> --step 2500` |
-| jina_m0 | `ex008000` | `deploy.py <run> --step ex008000` |
-| qwen3vl_2b | `ex007000` | `deploy.py <run> --step ex007000` |
+The adopted values live in `ADOPTED` in [`env.sh`](env.sh); `02_select.sh --list` prints them
+with the run each one comes from.
 
 > `MC2_RUN` overrides the run directory used for `metaclip2` when the candidate list does not
 > resolve to the intended one.
@@ -235,21 +223,10 @@ not change its output format.**
 caches and skip S2, use `04 --build --merge`.
 
 Easy to trip over:
-- `encode_anchor_tcap` · `encode_eva02` · `encode_metaclip` have no `--gpu`; they read `CUDA_VISIBLE_DEVICES`.
+- `encode_anchor_tcap` · `encode_eva02` · `encode_metaclip` · `encode_qwen3vl_embed` · `encode_llm2clip_anchor5` · `encode_gallery_emb` have no `--gpu`; they read `CUDA_VISIBLE_DEVICES`.
 - `--limit` cannot be combined with `--rep`.
-- Without `--rep`, `gme` and `metaclip2` write no `s4_nn` copy — copy it across yourself.
+- `siglip_maxsim` is encoded in two passes (`--stage base` in `track4_llm2clip`, `--stage maxsim` in `track4_beit3`); `04` runs both.
 - Gallery columns are `sorted(os.listdir(GALLERY))` and rows are `query_index.txt`; `utils/gallery_norm.py` is the single source.
-
-### Smoke coverage
-
-| stage | smoke |
-|---|---|
-| S1 encoding | 5/10 (`--limit` support: metaclip2·mc2h378_peft·beit3_v2·beit3_helip·siglip_maxsim) |
-| S2 rerankers | 7/7 (`--limit` or `--q-end`) |
-| S3/S4 | not needed — `run_reproduce.sh` runs in ~16 s without a GPU |
-
-`anchor_tcap`·`anchor_filip`·`eva02_pre`·`metaclip_v1`·`gme` have no `--limit`, so a smoke run
-would encode everything; `04 --smoke` skips them with a warning.
 
 ### Reference timings (full run, no GPU contention)
 
