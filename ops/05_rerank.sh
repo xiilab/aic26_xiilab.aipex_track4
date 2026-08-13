@@ -49,13 +49,14 @@ source "${_OPS_DIR:-$(dirname "${BASH_SOURCE[0]}")}/env.sh"
 
 REP="${REP:-0}"           # 0 = adopted path (model->cache) · 1 = --rep (model_rep->cache_rep)
                           #   this repository reproduces the adopted run, so 0 is the default
-LIST=0; ALL=0; FUSE=0; RECS=0; SMOKE=0; DOMERGE=0; SLICE=""; TARGETS=()
+LIST=0; ALL=0; FUSE=0; RECS=0; GEN1=0; SMOKE=0; DOMERGE=0; SLICE=""; TARGETS=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --list)    LIST=1 ;;
     --all)     ALL=1 ;;
     --fuse)    FUSE=1 ;;
     --recs)    RECS=1 ;;    # assemble recs_*.pt (build_recs.py · no GPU)
+    --gen1)    GEN1=1 ;;    # score 8b/qwen3vl_2b under track4_train, then build recs from those
     --merge)   DOMERGE=1 ;;
     --slice)   SLICE="$2"; shift ;;
     --smoke)   SMOKE=1 ;;
@@ -111,6 +112,7 @@ RECS_DIR="${RECS_DIR:-$REPO/$CACHE/s2_rerank}"
 # Shared scorer env — output (WORKDIR), candidate pool (POOL_FILE), recs (TRACK4) and the artifact
 # suffix. Without them a REP=0 run leaks into $TRACK4/rerank_work (= assets/cache/work/…).
 SENV=(env "TRACK4=$RECS_DIR" "WORKDIR=$REPO/$RR" "POOL_FILE=$POOLF" "OUT_SUFFIX=union_cache")
+SENV0=("${SENV[@]}")            # gapfill appends REUSE_EXTRA per member
 QENV=("${SENV[@]}")
 
 # Slice arguments (0:500 -> --q-start 0 --q-end 500). Supported by the hf/qwen scorers only.
@@ -162,7 +164,13 @@ rr_qwen3vl_2b() {
     "${RF[@]+"${RF[@]}"}" "${QS[@]+"${QS[@]}"}" "${QSMOKE[@]+"${QSMOKE[@]}"}"
 }
 rr_pixtral() {
-  run "${SENV[@]}" CUDA_VISIBLE_DEVICES="$GPU" "$PY_VLLM" $S2/score_union_pixtral_4b.py \
+  local pd="$REPO/$RR/fuse_cache/pixtral" pe=()
+  if [ -e "$pd/internvl_scores_pixtral_meta.json" ]; then
+    pe=("PIXTRAL_REUSE=$pd")
+  else
+    warn "fuse_cache/pixtral not found -> scoring the full pool (the adopted values live there; stage the bundle's dump to reproduce them)"
+  fi
+  run "${SENV[@]}" ${pe[@]+"${pe[@]}"} CUDA_VISIBLE_DEVICES="$GPU" "$PY_VLLM" $S2/score_union_pixtral_4b.py \
     --name pixtral "${RF[@]+"${RF[@]}"}" "${LIM[@]+"${LIM[@]}"}"
 }
 rr_ovis() {   # track4_gme (transformers 4.51.3), not track4_vllm — see PY_OVIS above
@@ -217,6 +225,29 @@ fi
 # S4a (tail_refinement) falls back to this dump for any (q,c) missing from the union cache.
 # Every input (base score · reranker union scores) is already cached, so **no GPU is used**.
 # Consumers hard-code the names: 8b -> recs_8b_p3_k20.pt, qwen3vl_2b -> recs_2b_dora_k5_p3.pt
+# The adopted 8b/qwen3vl_2b caches are not one generation: the pairs the recs dump covers were
+# scored under torch 2.8 + transformers 5.4.0 (track4_train) and the rest under torch 2.11 + 5.9.0
+# (track4_vllm). --gen1 reproduces the first pass, so the normal --all run inherits those values
+# through --reuse-recs instead of re-scoring them in the wrong environment.
+if [ "$GEN1" = 1 ]; then
+  say "[05] gen1 — 8b · qwen3vl_2b under track4_train, then recs"
+  need_py "$PY_TRAIN" train
+  need_path "$REPO/$CACHE/s1_base/base_score.pt" "bash ops/04_encode.sh --build"
+  G1="$REPO/$RR/gen1"; mkdir -p "$G1"
+  G1ENV=(env "TRACK4=$G1" "WORKDIR=$G1" "POOL_FILE=$REPO/$CACHE/s1_base/union_pool.pt" "OUT_SUFFIX=union_cache")
+  run "${G1ENV[@]}" CUDA_VISIBLE_DEVICES="$GPU" "$PY_TRAIN" $S2/score_union_qwen_4b.py \
+    --qwen 8b --name 8b "${RF[@]+"${RF[@]}"}"
+  run "${G1ENV[@]}" CUDA_VISIBLE_DEVICES="$GPU" "$PY_TRAIN" $S2/score_union_qwen_4b.py \
+    --qwen 2b --adapter "$MR/reranker/qwen3vl_2b" --name qwen3vl_2b "${RF[@]+"${RF[@]}"}"
+  for spec in "8b:recs_8b_p3_k20.pt" "qwen3vl_2b:recs_2b_dora_k5_p3.pt"; do
+    run env "BASE_PT=$REPO/$CACHE/s1_base/base_score.pt" "TRACK4=$G1" "$PY_ENS" \
+      $S2/build_recs.py --name "${spec%%:*}" --out "$RECS_DIR/${spec##*:}" --overwrite
+  done
+  echo; ok "-> $RECS_DIR/recs_8b_p3_k20.pt · recs_2b_dora_k5_p3.pt"
+  echo "  next: bash ops/05_rerank.sh --all   (8b/qwen3vl_2b now inherit through --reuse-recs)"
+  exit 0
+fi
+
 if [ "$RECS" = 1 ]; then
   say "[05] assembling recs (no GPU)"
   need_path "$CACHE/s1_base/base_score.pt" "bash ops/04_encode.sh --build"
@@ -272,10 +303,32 @@ if [ "$REP" = 1 ]; then
   need_path "$MR/reranker" "bash ops/03_deploy.sh --adopted"
 fi
 
+# 04 --build can widen the pool past an existing cache, and the scorers skip when their artifact is
+# there. Move it aside and hand it back through REUSE_EXTRA so only the missing pairs are scored.
+gapfill() {
+  local m="$1" f="$REPO/$RR/${m}_union_cache.pt" t="$REPO/$RR/.reuse_${m}.pt" n
+  GAP=()
+  [ -e "$f" ] || return 0
+  n=$("$PY_ENS" - "$f" "$REPO/$RR/$POOLF" <<'EOF'
+import sys, torch
+sc = torch.load(sys.argv[1], weights_only=False)["scores"]
+U = torch.load(sys.argv[2], weights_only=False)
+print(sum(1 for q, cs in zip(U["qorder"], U["union"]) for c in cs if (q, int(c)) not in sc))
+EOF
+) || return 0
+  [ "${n:-0}" -gt 0 ] 2>/dev/null || return 0
+  warn "$m: the pool holds $n pairs this cache lacks -> scoring only those (REUSE_EXTRA)"
+  [ "$DRY" = 1 ] && return 0
+  mv -f "$f" "$t"                     # out of the way so skip_if_exists does not fire
+  GAP=("REUSE_EXTRA=$t")
+}
+
 FAILED=""
 for m in "${TARGETS[@]}"; do
   case " ${MEMBERS[*]} " in *" $m "*) ;; *) die "unknown member: $m  (list them with --list)";; esac
   echo; say "[05] $m  (GPU=$GPU${SLICE:+ · slice $SLICE})"
+  GAP=(); [ "$SMOKE" = 1 ] || gapfill "$m"
+  SENV=("${SENV0[@]}" ${GAP[@]+"${GAP[@]}"})
   # One failing member does not stop the rest. Under set -e the whole run dies and the later
   # members are never attempted (a missing scipy for 8b once blocked qwen3vl_2b·pixtral·ovis).
   if ! "rr_$m"; then

@@ -11,7 +11,8 @@ not affect ranking.
 
 Output: base_score.pt ([1978, 36773]); use `--out` to change the path.
 Usage: ENS_DEV=cuda:0 python pipeline/S1_base/build_base.py [--out PATH]
-Environment: WEIGHTS (weight set) · S1_CACHE (member cache) · TRACK4_GALLERY · QUERY_INDEX · ENS_DEV
+Environment: WEIGHTS (weight set) · S1_CACHE (member cache) · ENS_DEV ·
+             PAB_TEST (root; TRACK4_GALLERY / GALLERY and QUERY_INDEX override it individually)
 """
 import argparse
 import os
@@ -31,7 +32,7 @@ sys.path[:0] = [os.path.join(ROOT, "tools", "ensemble"), os.path.join(ROOT, "pip
                 os.environ.get("TRACK4_CODE", _REPO)]
 from utils import gallery_norm as GN                      # noqa: E402
 from ensemble import mmnorm                    # noqa: E402  tools/ensemble combination core
-from adopted import base as base_weights          # noqa: E402  tools/ensemble single source
+from adopted import base as base_weights, base_variant, base_variant_names   # noqa: E402
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--out", default=None, help="output .pt (default = <S1 cache>/base_score.pt)")
@@ -39,6 +40,9 @@ ap.add_argument("--overwrite", action="store_true",
                 help="rebuild even if the artifact exists (default: skip)")
 ap.add_argument("--rep", action="store_true",
                 help="reproduction build: read members from and write output to assets/cache_rep/s1_base")
+ap.add_argument("--variant", default=None, choices=base_variant_names(),
+                help="re-weight the adopted members by a `base_variants` entry of the weight set "
+                     "(for build_union.py --extra-base)")
 a = ap.parse_args()
 
 DEV = os.environ.get("ENS_DEV", "cuda:0")
@@ -54,6 +58,9 @@ QIDX = os.environ.get("QUERY_INDEX", f"{PAB_TEST}/query_index.txt")
 FLAT = base_weights()                             # flat member weights {name: w} (default = base in final.json)
 if not FLAT:
     raise SystemExit("[build_base] base weights are empty (check the `base` entry in final.json).")
+if a.variant:
+    FLAT = base_variant(a.variant)
+    print(f"[S1] variant={a.variant} {FLAT}", flush=True)
 
 gal = sorted(os.listdir(GN.GALLERY_DIR))
 Q = len([l for l in open(QIDX) if l.strip()])

@@ -38,7 +38,7 @@ DEP_MASS = sum(DEP.values())
 
 def emb(prefix, name):
     """Unit-normalized (Q, G) embeddings. For a TTA view dump, the views are averaged."""
-    d = torch.load(f"{FEATS}/{prefix}_{name}_feats.pt", map_location="cpu", weights_only=False)
+    d = torch.load(D.bench_path(f"{prefix}_{name}_feats.pt", prefix), map_location="cpu", weights_only=False)
     if "img" in d:
         v = [x for x in TTA[name] if x in d["img"]]
         G = F.normalize(torch.stack([F.normalize(d["img"][x].float(), dim=-1) for x in v], 0).mean(0), dim=-1)

@@ -35,6 +35,10 @@ chk "$QUERY_INDEX" "evaluation query order — set QUERY_INDEX"
 for f in s1_base/union_pool.pt s2_rerank/recs_8b_p3_k20.pt s2_rerank/recs_2b_dora_k5_p3.pt; do chk "$CACHE/$f" "distributed artifact"; done
 for n in internvl_r32 qwen3vl_2b 8b pixtral llama ovis jina_m0; do chk "${REDUMP_DIR:-$CACHE/s2_rerank}/${n}_union_cache.pt" "distributed artifact"; done
 for n in internvl_r32 jina_m0 llama; do chk "$CACHE/s4_tail/${n}_nntail_cache.pt" "distributed artifact"; done
+# ln -s does not fail on a missing target, so without this S4a dies with a bare FileNotFoundError.
+for n in internvl_r32 pixtral llama32v; do
+  chk "$CACHE/s2_rerank/fuse_cache/$n/internvl_scores_${n}_meta.json" "fuse_cache — build with ops/05_rerank.sh --fuse"
+done
 BASE_PT="${BASE_PT:-$CACHE/s1_base/base_score.pt}"
 # A different WEIGHTS set re-fuses S1 with those values; the distributed base_score.pt is built from the deployed weights
 REBUILD_BASE=0
@@ -55,7 +59,11 @@ if [ -n "${COMB_W:-}" ]; then
 else
   COMB_W=$($WQ --get comb --variant "$VARIANT")
 fi
-TAIL_W=$($WQ --get tail_w)
+if [ -n "${TAIL_W:-}" ]; then
+  echo "[1/4] tail weights from the TAIL_W environment variable (tools/ensemble ignored)"
+else
+  TAIL_W=$($WQ --get tail_w)
+fi
 TAU_PX=$($PY -c "import json,sys;print(json.loads(sys.argv[1])['tau_px'])" "$($WQ --get s4e)")
 echo "[1/4] weights loaded (tools/ensemble · ${WEIGHTS:-deployed weights}) · variant=$VARIANT · comb=$COMB_W · tau_px=$TAU_PX"
 

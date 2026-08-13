@@ -15,7 +15,6 @@ Usage (a VLM, so it needs a vllm environment — track4_vllm in `requirements/RE
   $PY dump_fuse_cache.py --model <HF path> --name internvl_r32 [--adapter <LoRA>] [--rep]
   $PY dump_fuse_cache.py --model $VLM_MODELS/Llama-3.2-11B-Vision-Instruct --name llama32v --rep
 
-Environment: PAB_TEST · GALLERY · QUERY_TEXT · RECS (top-20 candidates = recs_8b_p3_k20.pt)
 """
 import argparse
 import json
@@ -137,10 +136,12 @@ if a.engine == "vllm":
     import base64                                                     # noqa: E402
     from io import BytesIO                                            # noqa: E402
     YES_ID = {13059, 16860, 14842, 51935}; NO_ID = {2649, 4753, 1836, 16071}
+    # PIX_DETERMINISTIC=1 pins one sequence per step and drops the prefix cache (re-run reproducible).
+    _det = {"max_num_seqs": 1, "enable_prefix_caching": False} if os.environ.get("PIX_DETERMINISTIC") == "1" else {}
     llm = LLM(model=a.model, tokenizer_mode="mistral", load_format="mistral",
               config_format="mistral", limit_mm_per_prompt={"image": 1}, max_model_len=8192,
               gpu_memory_utilization=float(os.environ.get("PIX_GPU_UTIL", "0.55")),
-              enforce_eager=True)
+              enforce_eager=True, **_det)
     _sp = SamplingParams(max_tokens=1, temperature=0, logprobs=20)
     print(f"[load] {time.time()-t0:.0f}s (vllm)", flush=True)
 

@@ -69,6 +69,23 @@ ITEMS=(
   "reranker:assets/model/reranker:assets/model/reranker"
   "hf_cache:assets/model/hf_cache:assets/model/hf_cache"
   "vlm_models:assets/model/vlm_models:assets/model/vlm_models"
+  # ── inheritance seeds (2.9 MB) — the one part of assets/cache that is NOT reproducible ────────
+  # 05 re-scores the union pool, but three members do not score every pair: they inherit the ones an
+  # earlier generation already scored, and those values are older than everything else in the
+  # bundle. They cannot be recomputed to the same numbers:
+  #   8b · qwen3vl_2b   recs_*.pt holds the adopted top-20/top-5 (100.0% bit-identical to the
+  #                     adopted union caches, max|d|=0) — produced under torch 2.8 + tf 5.4.0,
+  #                     while today's track4_vllm is torch 2.11 + tf 5.9.0
+  #   pixtral           fuse_cache/pixtral holds the adopted 1,978x20 (100.0%, max|d|=0); vLLM's
+  #                     continuous batching is not run-to-run stable, so re-scoring lands elsewhere
+  #                     (two runs of the identical config agree on 50.9% of pairs)
+  # Re-scoring them instead of inheriting costs mAP@10 99.3357 -> 99.2269 (measured). Staged, 05
+  # wires the inheritance itself and the final answer is byte-identical to the adopted one.
+  # The rest of assets/cache stays "produced, not staged": s1_base (3.6G) and s4_nn (1.4G) rebuild
+  # from the shipped weights, and the union caches are what 05 writes.
+  "seed_recs8:assets/cache/s2_rerank/recs_8b_p3_k20.pt:assets/cache/s2_rerank/recs_8b_p3_k20.pt"
+  "seed_recs2:assets/cache/s2_rerank/recs_2b_dora_k5_p3.pt:assets/cache/s2_rerank/recs_2b_dora_k5_p3.pt"
+  "seed_fuse:assets/cache/s2_rerank/fuse_cache:assets/cache/s2_rerank/fuse_cache"
 )
 # Training data (excluded by default — stage individually with e.g. `--only recap`)
 EXTRA_ITEMS=(
@@ -113,7 +130,10 @@ stage() {
   local sz; sz=$(du -sh "$src" 2>/dev/null | cut -f1 || true)   # measured only for a real staging run
   printf '%s -> ' "$sz"
 
-  if [ "$MODE" = copy ]; then
+  # Seeds are copied even under MODE=symlink: 05 --recs and 05 --fuse write to exactly these paths,
+  # so a symlink would send those writes into the source tree and destroy the one artifact that
+  # cannot be regenerated. 2.9 MB in total, so the copy costs nothing.
+  if [ "$MODE" = copy ] || [ "${name#seed_}" != "$name" ]; then
     printf 'copy\n'
     run mkdir -p "$(dirname "$dst")"
     run rm -rf "$dst"

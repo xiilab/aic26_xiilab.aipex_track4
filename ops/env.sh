@@ -77,6 +77,7 @@ PY_GME="${PY_GME:-$CONDA_BASE/envs/${PREFIX}gme/bin/python}"
 PY_LLM2CLIP="${PY_LLM2CLIP:-$CONDA_BASE/envs/${PREFIX}llm2clip/bin/python}"
 PY_VLLM="${PY_VLLM:-$CONDA_BASE/envs/${PREFIX}vllm/bin/python}"
 PY_ENS="${PY_ENS:-$CONDA_BASE/bin/python}"    # ensemble/score arithmetic (loads no model)
+export PY_TRAIN PY_BEIT3 PY_GME PY_LLM2CLIP PY_VLLM PY_ENS
 
 E="pipeline/S1_base/encode"
 

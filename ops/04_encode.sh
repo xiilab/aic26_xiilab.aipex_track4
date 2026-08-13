@@ -175,11 +175,33 @@ if [ "$BUILD" = 1 ]; then
   # build_union **merges** by default, so it requires the existing *_union_cache.pt as input.
   # From scratch those do not exist, so --no-merge builds union_pool only and S2 (05) scores it.
   # Use --merge to reuse existing caches instead.
+  # UNION_SRC (assets/cache/work/union_pool.pt) is a distributed artifact: it carries the top-20 of
+  # five greedy-sweep bases whose weight vectors are not in final.json, so it cannot be rebuilt here.
+  # Without it the pool is this base's top-20 alone, which measures -0.025 mAP@10. VARIANTS=1 widens
+  # it with re-weightings of the ten members instead, which measured worse (-0.050) — the extra
+  # candidates cost more than the recall they add — so it is off by default.
+  UV=()
+  if [ -e "${UNION_SRC:-$REPO/assets/cache/work/union_pool.pt}" ]; then
+    :
+  elif [ "${VARIANTS:-0}" = 1 ]; then
+    warn "no 5-base union — widening with variant bases (VARIANTS=1)"
+    _vp=""
+    for v in $(cd "$REPO" && "$PY_ENS" -c "import sys;sys.path.insert(0,'tools/ensemble');import adopted;print(' '.join(adopted.base_variant_names()))"); do
+      run env ENS_DEV="cuda:$GPU" "$PY_ENS" pipeline/S1_base/build_base.py \
+        --variant "$v" --out "$CACHE/s1_base/base_$v.pt" --overwrite
+      _vp="${_vp:+$_vp:}$CACHE/s1_base/base_$v.pt"
+    done
+    UV=(--extra-base "$_vp")
+  else
+    warn "no 5-base union — building from this base's top-20 only"
+    UV=(--allow-no-src)
+  fi
+
   if [ "$MERGE" = 1 ]; then
     warn "merge mode — the existing *_union_cache.pt (REDUMP_SRC·REDUMP_SRC2) must be present"
-    run "$PY_ENS" pipeline/S1_base/build_union.py "${RF[@]+"${RF[@]}"}"
+    run "$PY_ENS" pipeline/S1_base/build_union.py "${UV[@]+"${UV[@]}"}" "${RF[@]+"${RF[@]}"}"
   else
-    run "$PY_ENS" pipeline/S1_base/build_union.py --no-merge "${RF[@]+"${RF[@]}"}"
+    run "$PY_ENS" pipeline/S1_base/build_union.py --no-merge "${UV[@]+"${UV[@]}"}" "${RF[@]+"${RF[@]}"}"
   fi
   echo
   ok "-> $CACHE/s1_base/{base_score.pt,union_pool.pt}"

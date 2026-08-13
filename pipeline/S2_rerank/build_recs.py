@@ -21,8 +21,6 @@ feed S4a's fallback only for pairs the union caches already cover. Compare metri
 Usage:
   python build_recs.py --name 8b --rep
   python build_recs.py --name qwen3vl_2b --rep
-
-Environment: S1_CACHE · QUERY_INDEX · PAB_TEST
 """
 import argparse
 import os
@@ -47,6 +45,8 @@ ap.add_argument("--topk", type=int, default=None, help="number of candidates (de
 ap.add_argument("--out", default=None)
 ap.add_argument("--overwrite", action="store_true",
                 help="rebuild even if the artifact exists (default: skip)")
+ap.add_argument("--allow-missing", action="store_true",
+                help="impute 0.0 for candidates the union cache does not cover (default: abort)")
 ap.add_argument("--rep", action="store_true", help="operate on the reproduction cache (assets/cache_rep)")
 a = ap.parse_args()
 
@@ -85,7 +85,16 @@ for i, q in enumerate(qx):
         sc.append(float(v))
     recs.append({"qidx": q, "cand": cand, "sim": sim, "scores": sc})
 
+cov = 100 * (1 - miss / max(Q * K, 1))
+if miss and not a.allow_missing:
+    # An imputed 0.0 is indistinguishable from a real score downstream, so stop rather than overwrite.
+    raise SystemExit(
+        f"[build_recs] the union cache does not cover all candidates: {miss}/{Q*K} pairs missing "
+        f"({100-cov:.2f}%)\n"
+        f"  union: {UCACHE}\n"
+        f"  base : {BASE}\n"
+        f"  Rescore the member over the current pool, or pass --allow-missing to impute 0.0.")
+
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 torch.save({"recs": recs, "qwen": qwen_tag, "prompt": "p3", "K": K}, OUT)
-cov = 100 * (1 - miss / max(Q * K, 1))
 print(f"[build_recs] {len(recs)} queries · reranker score coverage {cov:.1f}% ({miss} pairs missing) -> {OUT}", flush=True)

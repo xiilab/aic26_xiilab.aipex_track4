@@ -1,6 +1,13 @@
-# Preserving Priors, Resolving Collisions: Complementary Reranking and Injective Assignment for Text-Based Person Re-Identification
+# Preserving Priors, Resolving Collisions: Complementary Reranking and Injective Assignment for Text-Based Person Re-Identification (Sim2Real)
+**Team Xiilab.AIpex** · Track 4, 10th AI City Challenge (ECCV 2026)
 
-Track 4, 10th AI City Challenge · **ECCV 2026 Workshops** · Team **Xiilab.AIpex**
+🏆 **1st place** — AI City Challenge 2026, Track 4 (Text-Based Person Anomaly Search, Sim2Real)
+
+![AI City 2026 Track 4](https://img.shields.io/badge/AI%20City%202026-Track%204-555)
+![1st place](https://img.shields.io/badge/rank-1st%20place-FFB000)
+![mAP@10 99.3020](https://img.shields.io/badge/mAP%4010-99.3020-1f6feb)
+![code MIT](https://img.shields.io/badge/code-MIT-1a7f37)
+
 
 ## Abstract
 
@@ -25,11 +32,11 @@ Challenge.
 
 ![PRC pipeline](docs/fig1_pipeline.png)
 
-## 🏆 Leaderboard — 1st place
+## Leaderboard 
 
 | # | Team | mAP@10 | R@1 | R@5 | R@10 |
 |--:|---|--:|--:|--:|--:|
-| **1** | **Xiilab.AIpex (ours)** | **99.3020** | 98.7361 | **99.9494** | **100.0000** |
+| **1** | **Xiilab.AIpex (ours)** | **99.3020** | **98.7361** | **99.9494** | **100.0000** |
 | 2 | Hallucination Team | 99.2551 | 98.7867 | 99.7472 | 99.7978 |
 | 3 | hiensumi | 98.3535 | 97.2194 | 99.6461 | 99.8989 |
 | 4 | UIT-OpenCube | 95.9370 | 92.4166 | 99.8483 | 99.8483 |

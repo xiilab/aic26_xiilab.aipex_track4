@@ -27,6 +27,19 @@ def z(v):
     return (v - v.mean()) / s if s > 1e-9 else v * 0.0
 
 
+def _order_key(comb, cand):
+    """COMB_EPS>0 rounds comb to that grid, so candidates within eps tie and the stable sort falls
+    back to the base order. COMB_TIE=col ties by gallery column instead. Unset, ordering is unchanged."""
+    eps = float(os.environ.get("COMB_EPS", "0") or 0)
+    if eps <= 0:
+        return comb
+    r = np.round(np.asarray(comb, float) / eps) * eps
+    if os.environ.get("COMB_TIE") == "col":
+        order = np.argsort(np.argsort(np.asarray(cand)))          # column rank, ascending
+        r = r - 1e-9 * order
+    return r
+
+
 def z_masked(vals, impute="zero"):
     """Handle uncovered (None) candidates.
 
@@ -86,7 +99,7 @@ def fuse_r10(track4, qx, weights, softmax_conf, inj_t=1.0, impute="zero"):
             if weights[mk]:
                 comb = comb + weights[mk] * z_masked([RR[mk].get((q, int(c))) for c in cand], impute)
         comb = np.asarray(comb, float)
-        srt = np.argsort(-comb, kind="stable")
+        srt = np.argsort(-_order_key(comb, cand), kind="stable")
         cand_order[i] = [cand[j] for j in srt]
         combs[i] = comb[srt]
         conf[i] = softmax_conf(comb, inj_t)

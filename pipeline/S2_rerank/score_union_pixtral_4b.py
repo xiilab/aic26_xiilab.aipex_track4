@@ -71,9 +71,11 @@ for _rp in os.environ.get("REUSE_EXTRA","").split(":"):
         print(f"[reuse-extra] {_rp}: +{len(_d)}", flush=True)
 
 t0 = time.time()
+# PIX_DETERMINISTIC=1 pins one sequence per forward step and drops the prefix cache, which is what
+_det = {"max_num_seqs": 1, "enable_prefix_caching": False} if os.environ.get("PIX_DETERMINISTIC") == "1" else {}
 llm = LLM(model=M, tokenizer_mode="mistral", load_format="mistral", config_format="mistral",
           limit_mm_per_prompt={"image": 1}, max_model_len=8192,
-          gpu_memory_utilization=float(os.environ.get("PIX_GPU_UTIL", "0.28")), enforce_eager=True)
+          gpu_memory_utilization=float(os.environ.get("PIX_GPU_UTIL", "0.28")), enforce_eager=True, **_det)
 sp = SamplingParams(max_tokens=1, temperature=0, logprobs=20)
 print(f"[load] {time.time()-t0:.0f}s", flush=True)
 def score_msgs(msgs):

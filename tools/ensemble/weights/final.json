@@ -1,48 +1,74 @@
 {
-  "meta": {
-    "selected_by": "held-out greedy CV (base members) + comb grid-search (per-axis, one-at-a-time)",
-    "objective": "R@10-first then mAP@10 (base) / injective mAP@10 (comb)",
-    "date": "2026-07-21",
-    "name": "final"
-  },
-  "base": {
-    "anchor_tcap": 1.0, "anchor_filip": 0.9, "metaclip2": 0.6, "mc2h378_peft": 0.5,
-    "beit3_v2": 0.5, "beit3_helip": 0.35, "gme": 0.2, "eva02_pre": 0.15,
-    "metaclip_v1": 0.15, "siglip_maxsim": 0.15
-  },
-  "comb": {
-    "sim": 0.55,
-    "internvl_r32": 0.7,
-    "pixtral": 0.4,
-    "qwen3vl_2b": 0.2,
-    "llama": 0.1,
-    "8b": 0.0
-  },
-  "injective": {
-    "T": 1.0
-  },
-  "tail": {
-    "overlay_w": [
-      0.55,
-      0.2,
-      0.0,
-      0.7,
-      0.3,
-      0.1
-    ],
-    "claim_theta": 0.5,
-    "save_m": 0.5,
-    "nn_cos": 0.8,
-    "nn_cons": 4,
-    "r5_cos": 0.8,
-    "propagate_ncons": 6,
-    "final_pass_tau_px": 512
-  },
-  "variants": {
-    "best": {
-      "comb": {
-        "pixtral": 0.4
-      }
-    }
+ "meta": {
+  "selected_by": "held-out greedy CV (base members) + comb grid-search (per-axis, one-at-a-time)",
+  "objective": "R@10-first then mAP@10 (base) / injective mAP@10 (comb)",
+  "date": "2026-07-21",
+  "name": "final"
+ },
+ "base": {
+  "anchor_tcap": 1.0,
+  "anchor_filip": 0.9,
+  "metaclip2": 0.6,
+  "mc2h378_peft": 0.5,
+  "beit3_v2": 0.5,
+  "beit3_helip": 0.35,
+  "gme": 0.2,
+  "eva02_pre": 0.15,
+  "metaclip_v1": 0.15,
+  "siglip_maxsim": 0.15
+ },
+ "comb": {
+  "sim": 0.55,
+  "internvl_r32": 0.7,
+  "pixtral": 0.4,
+  "qwen3vl_2b": 0.2,
+  "llama": 0.1,
+  "8b": 0.0
+ },
+ "injective": {
+  "T": 1.0
+ },
+ "tail": {
+  "overlay_w": [
+   0.55,
+   0.2,
+   0.0,
+   0.7,
+   0.3,
+   0.1
+  ],
+  "claim_theta": 0.5,
+  "save_m": 0.5,
+  "nn_cos": 0.8,
+  "nn_cons": 4,
+  "r5_cos": 0.8,
+  "propagate_ncons": 6,
+  "final_pass_tau_px": 512
+ },
+ "variants": {
+  "best": {
+   "comb": {
+    "pixtral": 0.4
+   }
   }
+ },
+ "base_variants": {
+  "uniform": "all",
+  "anchor": {
+   "anchor_tcap": 1.0,
+   "anchor_filip": 1.0,
+   "mc2h378_peft": 0.6
+  },
+  "beit3": {
+   "beit3_v2": 1.0,
+   "beit3_helip": 1.0,
+   "metaclip_v1": 0.6
+  },
+  "zs": {
+   "gme": 1.0,
+   "eva02_pre": 1.0,
+   "metaclip2": 0.8,
+   "siglip_maxsim": 0.6
+  }
+ }
 }

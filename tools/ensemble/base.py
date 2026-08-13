@@ -29,11 +29,22 @@ GRID = [0.0, 0.05, 0.08, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.7, 1.0]
 TTA = {"anchor_tcap": ("base", "hflip", "z090"), "anchor_filip": ("base", "hflip", "z080")}
 
 
+def bench_path(fn, prefix=None):
+    """Bench file, flat under UCC_FEATS or in the per-bench subdirectory the bundle ships."""
+    flat = f"{UCC}/{fn}"
+    if os.path.exists(flat):
+        return flat
+    sub = f"{UCC}/{prefix or fn.split('_')[0]}/{fn}"
+    if os.path.exists(sub):
+        return sub
+    raise FileNotFoundError(f"{flat} (also tried {sub})")
+
+
 def enc_scores(prefix="ucc"):
     """Per-encoder [Q, G] score matrix, min-max normalized. prefix = ucc | uca."""
     out = {}
     for name in [ANCHOR] + ENCODERS:
-        d = torch.load(f"{UCC}/{prefix}_{name}_feats.pt", map_location="cpu", weights_only=False)
+        d = torch.load(bench_path(f"{prefix}_{name}_feats.pt", prefix), map_location="cpu", weights_only=False)
         if "img" in d:                                  # TTA view dump
             views = [v for v in TTA[name] if v in d["img"]]
             Qb = F.normalize(d["txt"]["base"].float(), dim=-1).to(DEV)
@@ -51,7 +62,7 @@ class UCCBench:
     name = "UCC"
 
     def __init__(self, objective="self"):
-        pool = torch.load(f"{UCC}/ucc_champion_pool.pt", weights_only=False)
+        pool = torch.load(bench_path("ucc_champion_pool.pt", "ucc"), weights_only=False)
         self.pids = torch.tensor(np.asarray(pool["pids"]), device=DEV)
         self.S = enc_scores("ucc")
         self.N = self.S[ANCHOR].shape[0]
@@ -82,7 +93,7 @@ class UCABench:
 
     def __init__(self, objective="multi"):
         import json
-        b = json.load(open(f"{UCC}/uca_bench.json"))
+        b = json.load(open(bench_path("uca_bench.json", "uca")))
         gv = {v: i for i, v in enumerate(sorted(set(b["gvideo"])))}
         self.gvid = torch.tensor([gv[v] for v in b["gvideo"]], device=DEV)              # [4267]
         self.qvid = torch.tensor([gv[q["video"]] for q in b["queries"]], device=DEV)    # [2000]

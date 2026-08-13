@@ -320,10 +320,13 @@ def s4d_propagate(ctx, answer=S4C_NAME, ncons=6, max_rounds=6):
     """
     t4, Q = ctx.t4, ctx.Q
     A0 = ctx.read(answer)
+    _drop = {x for x in os.environ.get("CONS_DROP", "").split(",") if x}
     RK = {k: torch.load(f"{t4}/{n}_union_cache.pt")["scores"]
           for k, n in [("ovis", "ovis"), ("jina_m0", "jina_m0"), ("internvl_r32", "internvl_r32"),
                        ("pixtral", "pixtral"), ("llama", "llama"), ("8b", "8b")]
-          if os.path.exists(f"{t4}/{n}_union_cache.pt")}
+          if k not in _drop and os.path.exists(f"{t4}/{n}_union_cache.pt")}
+    if _drop:
+        print(f"[S4d] cons vote: dropped {sorted(_drop)} -> {len(RK)} voters", flush=True)
     for nm, f in [("internvl_r32", "internvl_r32_nntail_cache.pt"), ("jina_m0", "jina_m0_nntail_cache.pt"),
                   ("llama", "llama_nntail_cache.pt")]:
         p = f"{t4}/{f}" if os.path.exists(f"{t4}/{f}") else os.path.join(HERE, f)

@@ -52,6 +52,23 @@ def base(path: str | None = None) -> dict:
     return _clean(load(path)["base"])
 
 
+def base_variant(name: str, path: str | None = None) -> dict:
+    """`base` re-weighted by one entry of `base_variants`.
+    """
+    flat = base(path)
+    spec = _clean(load(path).get("base_variants", {})).get(name)
+    if spec is None:
+        raise KeyError(f"base_variants has no `{name}` (have: "
+                       f"{sorted(_clean(load(path).get('base_variants', {})))})")
+    if spec == "all":
+        return {k: 1.0 for k in flat}
+    return {k: float(spec.get(k, 0.15)) for k in flat}
+
+
+def base_variant_names(path: str | None = None) -> list:
+    return sorted(_clean(load(path).get("base_variants", {})))
+
+
 def comb(variant: str = "best", path: str | None = None) -> dict:
     """Reranker z-fusion weights. `variant` overrides them from the `variants` entry
     (adopted = best)."""
