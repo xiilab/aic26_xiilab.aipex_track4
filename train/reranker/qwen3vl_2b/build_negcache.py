@@ -47,10 +47,18 @@ POOL_TAG    = "full" if not POOL_SIZE else str(POOL_SIZE)
 NEG_CACHE   = f"{OUTPUT_DIR}/negcache_hardimg_{ANCHOR_CKPT}_pool{POOL_TAG}_top{N_IMG_NEG}_tau{NEARDUP_TAU}.pt"
 
 
-def _map(ann, root, ext):
+def _rel(ann, ext):
+    """ "train/imgs_N/sub/id.jpg" → "Part {N//8+1}/imgs_N/sub/id{ext}" — the form stored in the
+    cache. Keeping it relative to train_webp is what lets the dataset sit anywhere; the trainers
+    join it with their own IMG_ROOT_WEBP."""
     p = ann.split("/"); n = int(p[1].replace("imgs_", ""))
     fn = (os.path.splitext(p[3])[0] + ext) if ext else p[3]
-    return f"{root}/Part {n // 8 + 1}/{p[1]}/{p[2]}/{fn}"
+    return f"Part {n // 8 + 1}/{p[1]}/{p[2]}/{fn}"
+
+
+def _map(ann, root, ext):
+    """Absolute path under `root` — used to actually read images while mining."""
+    return f"{root}/{_rel(ann, ext)}"
 
 
 def load_working_set():
@@ -162,9 +170,9 @@ def main():
                 n_dropped_neardup += 1; continue
             w = W[gi]
             examples.append({
-                "image_path": _map(w["ann"], IMG_ROOT_WEBP, ".webp"),        # for training (webp 1024)
+                "image_path": _rel(w["ann"], ".webp"),        # relative to <PAB_TRAIN>/train_webp
                 "pos": w["pos"], "flip_negs": w["flip_negs"], "axes": w["axes"],
-                "img_negs": [_map(W[j]["ann"], IMG_ROOT_WEBP, ".webp") for j in negs],
+                "img_negs": [_rel(W[j]["ann"], ".webp") for j in negs],
                 "rank_of_X": int(ranks[r]),
             })
         if (s // CH) % 20 == 0:

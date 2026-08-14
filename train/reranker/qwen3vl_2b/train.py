@@ -51,6 +51,15 @@ NEARDUP_TAU   = 0.85
 POOL_TAG      = "full" if not NEG_POOL_SIZE else str(NEG_POOL_SIZE)
 MINING_DIR    = os.environ.get("MINE_DIR", f"{_REPO}/assets/data/mining")   # negcache input — read only
 NEG_CACHE   = f"{MINING_DIR}/negcache_hardimg_{ANCHOR_CKPT}_pool{POOL_TAG}_top{N_IMG_NEG}_tau{NEARDUP_TAU}.pt"   # point at OUTPUT_DIR if you rebuilt it yourself
+# The cache stores image paths relative to this root, so the dataset can sit anywhere.
+DATA_ROOT     = os.environ.get("PAB_TRAIN", f"{_REPO}/assets/data/raw/pab_train")
+IMG_ROOT_WEBP = f"{DATA_ROOT}/train_webp"
+
+
+def img_abs(p):
+    """Cache path -> readable path. Caches written before the paths were made relative hold an
+    absolute path already; those are passed through so an old cache keeps working."""
+    return p if os.path.isabs(p) else os.path.join(IMG_ROOT_WEBP, p)
 
 # ---- DoRA (r16/α32/dropout0.10) ----
 DORA_RANK       = 16
@@ -287,10 +296,10 @@ def main():
         run, run_ax = fresh(); ep_, ep_ax = fresh(); t0 = time.time(); nan_skips = 0
         print(f"\n===== epoch {ep}/{EPOCHS}  examples={len(ex_ep):,} =====", flush=True)
         for qi, e in enumerate(ex_ep):
-            X, cap = e["image_path"], e["pos"]
+            X, cap = img_abs(e["image_path"]), e["pos"]
             s_pos = score_logit(cap, X)                                       # shared by both paths (one forward)
             logA = torch.stack([s_pos] + [score_logit(f, X) for f in e["flip_negs"]]).float()     # A: contrast over text
-            logB = torch.stack([s_pos] + [score_logit(cap, ni) for ni in e["img_negs"]]).float()  # B: contrast over images
+            logB = torch.stack([s_pos] + [score_logit(cap, img_abs(ni)) for ni in e["img_negs"]]).float()  # B: contrast over images
             lossA, lossB = CE(logA), CE(logB)
             loss = lossA + LAMBDA_B * lossB
             if not torch.isfinite(loss):

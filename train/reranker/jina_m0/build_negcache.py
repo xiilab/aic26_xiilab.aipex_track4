@@ -31,9 +31,12 @@ ORIG_STYLE="p00_original"   # caption preset used for the pool
 csv.field_size_limit(10**7)
 
 def norm_act(s): return (s or "").strip().lower()
-def ann2webp(ann):  # "train/imgs_N/sub/id.jpg" → webp path
+def ann2webp(ann):  # "train/imgs_N/sub/id.jpg" → "Part {N//8+1}/imgs_N/sub/id.webp"
+    # Relative to train_webp, matching what qwen3vl_2b/build_negcache.py stores — these strings are
+    # both the action_negs written to the cache and the keys matched against `image_path`, so the
+    # two must use the same form. No image is opened here (only captions are embedded).
     p=ann.split("/"); n=int(p[1].replace("imgs_",""))
-    return f"{WEBP}/Part {n//8+1}/{p[1]}/{p[2]}/{os.path.splitext(p[3])[0]}.webp"
+    return f"Part {n//8+1}/{p[1]}/{p[2]}/{os.path.splitext(p[3])[0]}.webp"
 
 # 1) load the pool: caption, action, webp
 print("[1] loading the pool ...",flush=True)
